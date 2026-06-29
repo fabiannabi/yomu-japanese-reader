@@ -9,6 +9,7 @@ import { hasApiKey } from "../../services/settings.ts";
 export interface WordSheetData {
   identity: string;
   word: string;
+  surface?: string; // forma tal cual aparece (para resaltarla en el desglose)
   reading: string;
   meaning?: string;
   pos?: string;
@@ -50,7 +51,7 @@ export function buildWordDetail(
   wireDeck(el, data, options);
 
   const box = el.querySelector<HTMLElement>("#explain")!;
-  void renderGrammarFor(box, data.sentence?.trim() || data.word, onClose);
+  void renderGrammarFor(box, data.sentence?.trim() || data.word, onClose, data.surface);
 
   return el;
 }
@@ -188,19 +189,24 @@ function wireDeck(
 async function renderGrammarFor(
   box: HTMLElement,
   sentence: string,
-  onClose?: () => void
+  onClose?: () => void,
+  focusSurface?: string
 ) {
   box.innerHTML = `<p class="explain__loading">Analizando gramática…</p>`;
   try {
     const segments = await analyzeGrammar(sentence);
-    renderGrammar(box, segments);
+    renderGrammar(box, segments, focusSurface);
     await offerAi(box, sentence, onClose);
   } catch {
     box.innerHTML = `<p class="explain__error">No se pudo analizar la gramática.</p>`;
   }
 }
 
-function renderGrammar(box: HTMLElement, segments: GrammarSegment[]) {
+function renderGrammar(
+  box: HTMLElement,
+  segments: GrammarSegment[],
+  focusSurface?: string
+) {
   box.innerHTML = `<p class="explain__title">Gramática</p>`;
   if (segments.length === 0) {
     const p = document.createElement("p");
@@ -211,9 +217,14 @@ function renderGrammar(box: HTMLElement, segments: GrammarSegment[]) {
   }
   const ul = document.createElement("ul");
   ul.className = "grammar";
+  let focusedLi: HTMLElement | null = null;
   for (const seg of segments) {
     const li = document.createElement("li");
     li.className = "grammar__item";
+    if (focusSurface && !focusedLi && seg.surface === focusSurface) {
+      li.classList.add("grammar__item--focus");
+      focusedLi = li;
+    }
 
     const head = document.createElement("div");
     head.className = "grammar__head";
@@ -240,6 +251,13 @@ function renderGrammar(box: HTMLElement, segments: GrammarSegment[]) {
     ul.appendChild(li);
   }
   box.appendChild(ul);
+
+  if (focusedLi) {
+    const target = focusedLi;
+    requestAnimationFrame(() =>
+      target.scrollIntoView({ block: "nearest" })
+    );
+  }
 }
 
 async function offerAi(

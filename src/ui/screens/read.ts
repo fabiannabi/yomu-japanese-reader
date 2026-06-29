@@ -219,9 +219,27 @@ function renderLine(tokens: AnnotatedToken[], root: HTMLElement): HTMLElement {
     p.innerHTML = "&nbsp;";
     return p;
   }
-  const sentence = tokens.map((t) => t.surface).join("");
-  for (const t of tokens) p.appendChild(renderToken(t, root, sentence));
+  // Agrupa por oración (corta en 。！？…) para que la gramática se acote a la
+  // oración de la palabra tocada, no a todo el párrafo.
+  for (const group of splitSentences(tokens)) {
+    const sentence = group.map((t) => t.surface).join("");
+    for (const t of group) p.appendChild(renderToken(t, root, sentence));
+  }
   return p;
+}
+
+function splitSentences(tokens: AnnotatedToken[]): AnnotatedToken[][] {
+  const groups: AnnotatedToken[][] = [];
+  let cur: AnnotatedToken[] = [];
+  for (const t of tokens) {
+    cur.push(t);
+    if (/[。．！？!?…]/.test(t.surface)) {
+      groups.push(cur);
+      cur = [];
+    }
+  }
+  if (cur.length) groups.push(cur);
+  return groups;
 }
 
 function renderToken(t: AnnotatedToken, root: HTMLElement, sentence: string): Node {
@@ -265,6 +283,7 @@ function showWord(
   const data = {
     identity,
     word: t.entry?.word ?? t.baseForm,
+    surface: t.surface,
     reading: t.entry?.reading || t.reading,
     meaning: t.entry?.meaning,
     pos: t.entry?.pos,

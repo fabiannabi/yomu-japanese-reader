@@ -239,6 +239,9 @@ ruby rt {
 .sheet {
   width: 100%;
   max-width: 560px;
+  max-height: 85vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background: var(--surface);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   box-shadow: var(--shadow-sheet);
