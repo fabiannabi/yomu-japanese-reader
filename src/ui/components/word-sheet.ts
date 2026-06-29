@@ -19,32 +19,27 @@ interface WordSheetOptions {
   onTracked?: (identity: string) => void;
 }
 
-/** Abre la hoja inferior de detalle de una palabra (§7). */
-export async function openWordSheet(
+/**
+ * Construye el contenido del detalle de una palabra (escritura, lectura, POS,
+ * significado, [al mazo], [explicar]). Se usa tanto en la hoja inferior (móvil)
+ * como en el panel lateral del lector (escritorio). `onClose` se invoca al
+ * navegar a Ajustes desde "explicar" (la hoja la usa para cerrarse).
+ */
+export function buildWordDetail(
   data: WordSheetData,
-  options: WordSheetOptions = {}
-): Promise<void> {
-  const [known, inDeck] = await Promise.all([
-    isKnown(data.identity),
-    isInDeck(data.identity),
-  ]);
-
-  const overlay = document.createElement("div");
-  overlay.className = "sheet-overlay";
-
-  const sheet = document.createElement("div");
-  sheet.className = "sheet";
-  sheet.setAttribute("role", "dialog");
-  sheet.setAttribute("aria-label", `Detalle de ${data.word}`);
+  options: WordSheetOptions = {},
+  onClose?: () => void
+): HTMLElement {
+  const el = document.createElement("div");
+  el.className = "word-detail";
 
   const hasMeaning = !!data.meaning;
-  sheet.innerHTML = `
-    <div class="sheet__grip" aria-hidden="true"></div>
+  el.innerHTML = `
     <h2 class="sheet__word" lang="ja">${escapeHtml(data.word)}</h2>
     ${data.reading ? `<p class="sheet__reading" lang="ja">${escapeHtml(data.reading)}</p>` : ""}
     ${data.pos ? `<span class="sheet__pos">${escapeHtml(data.pos)}</span>` : ""}
     <p class="sheet__meaning ${hasMeaning ? "" : "sheet__meaning--empty"}">
-      ${hasMeaning ? escapeHtml(data.meaning!) : "Sin definición en el diccionario local."}
+      ${hasMeaning ? escapeHtml(data.meaning!) : "No está en el diccionario (puede ser un nombre propio o una palabra poco frecuente)."}
     </p>
     <div class="sheet__actions">
       <button class="btn btn--primary" data-action="deck"></button>
@@ -53,14 +48,14 @@ export async function openWordSheet(
     <div class="explain" id="explain" hidden></div>
   `;
 
-  const deckBtn = sheet.querySelector<HTMLButtonElement>('[data-action="deck"]')!;
-  function refreshDeckBtn(state: { known: boolean; inDeck: boolean }) {
-    if (state.known) {
+  const deckBtn = el.querySelector<HTMLButtonElement>('[data-action="deck"]')!;
+  function refreshDeckBtn(s: { known: boolean; inDeck: boolean }) {
+    if (s.known) {
       deckBtn.textContent = "Ya la dominas";
       deckBtn.disabled = true;
       deckBtn.classList.remove("btn--primary");
       deckBtn.classList.add("btn--known");
-    } else if (state.inDeck) {
+    } else if (s.inDeck) {
       deckBtn.textContent = "En el mazo";
       deckBtn.disabled = true;
       deckBtn.classList.remove("btn--primary");
@@ -70,7 +65,11 @@ export async function openWordSheet(
       deckBtn.disabled = false;
     }
   }
-  refreshDeckBtn({ known, inDeck });
+  refreshDeckBtn({ known: false, inDeck: false });
+  // Estado real (conocida / en el mazo) de forma asíncrona.
+  void Promise.all([isKnown(data.identity), isInDeck(data.identity)]).then(
+    ([known, inDeck]) => refreshDeckBtn({ known, inDeck })
+  );
 
   deckBtn.addEventListener("click", async () => {
     deckBtn.disabled = true;
@@ -79,8 +78,8 @@ export async function openWordSheet(
     if (added) options.onTracked?.(data.identity);
   });
 
-  const explainBtn = sheet.querySelector<HTMLButtonElement>('[data-action="explain"]')!;
-  const explainBox = sheet.querySelector<HTMLElement>("#explain")!;
+  const explainBtn = el.querySelector<HTMLButtonElement>('[data-action="explain"]')!;
+  const explainBox = el.querySelector<HTMLElement>("#explain")!;
   explainBtn.addEventListener("click", async () => {
     const sentence = data.sentence?.trim() || data.word;
     explainBox.hidden = false;
@@ -101,7 +100,7 @@ export async function openWordSheet(
         link.textContent = "Ir a Ajustes";
         link.style.marginTop = "var(--space-2)";
         link.addEventListener("click", () => {
-          close();
+          onClose?.();
           location.hash = "#/ajustes";
         });
         explainBox.appendChild(link);
@@ -115,6 +114,22 @@ export async function openWordSheet(
     }
   });
 
+  return el;
+}
+
+/** Abre la hoja inferior de detalle de una palabra (móvil). */
+export function openWordSheet(
+  data: WordSheetData,
+  options: WordSheetOptions = {}
+): void {
+  const overlay = document.createElement("div");
+  overlay.className = "sheet-overlay";
+
+  const sheet = document.createElement("div");
+  sheet.className = "sheet";
+  sheet.setAttribute("role", "dialog");
+  sheet.setAttribute("aria-label", `Detalle de ${data.word}`);
+
   function close() {
     overlay.removeEventListener("keydown", onKey);
     overlay.remove();
@@ -122,10 +137,18 @@ export async function openWordSheet(
   function onKey(e: KeyboardEvent) {
     if (e.key === "Escape") close();
   }
+
+  const grip = document.createElement("div");
+  grip.className = "sheet__grip";
+  grip.setAttribute("aria-hidden", "true");
+  grip.addEventListener("click", close);
+
+  sheet.appendChild(grip);
+  sheet.appendChild(buildWordDetail(data, options, close));
+
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) close();
   });
-  sheet.querySelector(".sheet__grip")!.addEventListener("click", close);
   overlay.addEventListener("keydown", onKey);
 
   overlay.appendChild(sheet);

@@ -1,6 +1,11 @@
 import "../../styles/settings.css";
 import { getSettings, saveSettings, MODELS } from "../../services/settings.ts";
 import { exportDeck } from "../../services/deck.ts";
+import {
+  getDictStatus,
+  loadFullDictionary,
+  type LoadProgress,
+} from "../../data/jmdict.ts";
 
 export function SettingsScreen(): HTMLElement {
   const root = document.createElement("section");
@@ -42,6 +47,12 @@ async function render(root: HTMLElement) {
     </div>
 
     <div class="field">
+      <label class="field__label">Diccionario</label>
+      <div class="dict-bar" id="dict-bar"></div>
+      <p class="field__hint">El diccionario completo (~22.000 palabras) mejora las definiciones. Se descarga una vez y queda offline.</p>
+    </div>
+
+    <div class="field">
       <label class="field__label">Respaldo</label>
       <button class="btn" id="export">Exportar mazo (JSON)</button>
     </div>
@@ -76,5 +87,38 @@ async function render(root: HTMLElement) {
     a.download = "yomu-mazo.json";
     a.click();
     URL.revokeObjectURL(url);
+  });
+
+  void renderDictBar(container.querySelector<HTMLElement>("#dict-bar")!);
+}
+
+async function renderDictBar(bar: HTMLElement) {
+  const status = await getDictStatus();
+  if (status.source === "full") {
+    bar.innerHTML = `<span>Completo · ${status.entryCount.toLocaleString("es")} palabras</span>`;
+    return;
+  }
+  bar.innerHTML = `
+    <span id="dict-label">Básico · ${status.entryCount.toLocaleString("es")} palabras</span>
+    <button class="btn" id="dict-dl">Descargar completo</button>
+  `;
+  bar.querySelector<HTMLButtonElement>("#dict-dl")!.addEventListener("click", async () => {
+    bar.innerHTML = `
+      <span id="dict-label">Preparando…</span>
+      <div class="dict-bar__progress"><span id="dict-prog"></span></div>
+    `;
+    const labelEl = bar.querySelector<HTMLElement>("#dict-label")!;
+    const progEl = bar.querySelector<HTMLElement>("#dict-prog")!;
+    const onProgress = (p: LoadProgress) => {
+      labelEl.textContent = p.message;
+      if (p.ratio !== undefined) progEl.style.width = `${Math.round(p.ratio * 100)}%`;
+    };
+    try {
+      const result = await loadFullDictionary(onProgress);
+      bar.innerHTML = `<span>Completo · ${result.entryCount.toLocaleString("es")} palabras</span>`;
+    } catch (err) {
+      console.error(err);
+      labelEl.textContent = "Error al descargar. Reintenta más tarde.";
+    }
   });
 }

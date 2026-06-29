@@ -173,3 +173,31 @@ body {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* Barra de estado del diccionario (Ajustes; progreso reutilizado por el OCR) */
+.dict-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+.dict-bar__progress {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+.dict-bar__progress > span {
+  display: block;
+  height: 100%;
+  background: var(--indigo);
+  width: 0;
+  transition: width 0.2s ease;
+}

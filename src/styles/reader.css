@@ -1,11 +1,6 @@
-/* Lector, selector de fuente y hoja de detalle de palabra */
+/* Lector, hoja de fuentes y detalle de palabra */
 
-.source__label {
-  display: block;
-  font-weight: 600;
-  margin-bottom: var(--space-2);
-}
-
+/* Caja de texto para pegar (en la hoja "Cambiar fuente") */
 .source__textarea {
   width: 100%;
   min-height: 160px;
@@ -18,81 +13,7 @@
   font-family: var(--font-jp);
   font-size: 1.05rem;
   line-height: 1.7;
-}
-
-.source__actions {
-  display: flex;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
-  flex-wrap: wrap;
-}
-
-.source__hint {
-  margin-top: var(--space-4);
-  color: var(--ink-soft);
-  font-size: 0.9rem;
-}
-
-/* Divisor "o trae texto de" */
-.source-divider {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin: var(--space-5) 0 var(--space-4);
-  color: var(--ink-soft);
-  font-size: 0.85rem;
-}
-.source-divider::before,
-.source-divider::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--line);
-}
-
-/* Cuadrícula de fuentes */
-.source-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-3);
-}
-.source-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-1);
-  text-align: left;
-  padding: var(--space-4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  color: var(--ink);
-  font-family: inherit;
-  cursor: pointer;
-  transition: border-color 0.12s ease, background 0.12s ease;
-}
-.source-card:hover {
-  border-color: var(--indigo);
-  background: var(--indigo-tint);
-}
-.source-card__icon svg {
-  width: 26px;
-  height: 26px;
-  stroke: var(--indigo);
-  fill: none;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  margin-bottom: var(--space-1);
-}
-.source-card__title {
-  font-weight: 600;
-  font-size: 0.95rem;
-}
-.source-card__desc {
-  color: var(--ink-soft);
-  font-size: 0.78rem;
-  line-height: 1.35;
+  margin-bottom: var(--space-3);
 }
 
 .ocr-status {
@@ -104,35 +25,6 @@
   color: var(--ink-soft);
 }
 
-/* Barra de estado del diccionario */
-.dict-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  margin-bottom: var(--space-4);
-  font-size: 0.85rem;
-  color: var(--ink-soft);
-}
-.dict-bar__progress {
-  flex: 1;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--line);
-  overflow: hidden;
-}
-.dict-bar__progress > span {
-  display: block;
-  height: 100%;
-  background: var(--indigo);
-  width: 0;
-  transition: width 0.2s ease;
-}
-
 /* Vista de lectura */
 .reader__toolbar {
   display: flex;
@@ -141,14 +33,6 @@
   margin-bottom: var(--space-4);
   gap: var(--space-3);
 }
-.reader__comprehension {
-  font-size: 0.85rem;
-  color: var(--ink-soft);
-}
-.reader__comprehension strong {
-  color: var(--indigo);
-}
-
 .comprehension-chip {
   font-size: 0.8rem;
   color: var(--indigo);
@@ -157,14 +41,53 @@
   padding: 4px 12px;
   white-space: nowrap;
 }
-.reader__hint {
-  font-size: 0.82rem;
+
+/* Lector a pantalla ancha: dos columnas (lectura + diccionario) */
+.screen--reader {
+  max-width: 1120px;
+}
+.reader__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+.reader__layout {
+  display: flex;
+  gap: var(--space-5);
+  align-items: flex-start;
+}
+.reader__main {
+  flex: 1;
+  min-width: 0;
+}
+.reader__aside {
+  width: 340px;
+  flex-shrink: 0;
+  position: sticky;
+  top: var(--space-4);
+  max-height: calc(100vh - var(--nav-height) - var(--space-6));
+  overflow-y: auto;
+  border-left: 1px solid var(--line);
+  padding-left: var(--space-5);
+}
+.reader__aside-hint {
   color: var(--ink-soft);
-  margin: 0 0 var(--space-4);
-  padding: var(--space-2) var(--space-3);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  margin: 0;
+}
+.reader__state {
+  color: var(--ink-soft);
+  text-align: center;
+  padding: var(--space-6) var(--space-3);
+}
+
+/* En móvil/tablet angosto no hay panel lateral: el detalle sale como hoja. */
+@media (max-width: 899px) {
+  .reader__layout {
+    display: block;
+  }
+  .reader__aside {
+    display: none;
+  }
 }
 
 .reader__body {

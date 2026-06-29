@@ -3,47 +3,62 @@ import "../../styles/settings.css";
 import { analyzeText, type AnnotatedToken } from "../../services/reader.ts";
 import { getKnownSet } from "../../services/known-words.ts";
 import { getDeckWordSet } from "../../services/deck.ts";
-import {
-  getDictStatus,
-  loadFullDictionary,
-  type LoadProgress,
-} from "../../data/jmdict.ts";
-import { openWordSheet } from "../components/word-sheet.ts";
-import { openSourceSheet, type SourceKind } from "../components/source-sheet.ts";
-import { recognizeImage, type OcrProgress } from "../../services/ocr.ts";
+import { openWordSheet, buildWordDetail } from "../components/word-sheet.ts";
+import { openChooser } from "../components/chooser-sheet.ts";
+import { getDictStatus, loadFullDictionary } from "../../data/jmdict.ts";
+import { AOZORA_WORKS, fetchAozoraText } from "../../services/aozora.ts";
 
-/** Identidad de un token para el modelo del estudiante (forma de diccionario o superficie). */
+const LAST_TEXT_KEY = "yomu:lastText";
+const WIDE = "(min-width: 900px)";
+const MAX_CHARS = 2000; // tope por sesión de lectura (rendimiento + foco de estudio)
+const EXAMPLE =
+  "日本語を勉強する。\n今日はとてもいい天気です。\n新しい言葉を少しずつ覚える。";
+
+/** Recorta textos largos al final de una oración para una sesión manejable. */
+function clip(text: string, max = MAX_CHARS): string {
+  if (text.length <= max) return text;
+  const slice = text.slice(0, max);
+  const stop = Math.max(slice.lastIndexOf("。"), slice.lastIndexOf("\n"));
+  return (stop > max * 0.5 ? slice.slice(0, stop + 1) : slice).trim();
+}
+
+// Relatos cortos para la lectura por defecto (las novelas largas siguen
+// disponibles en "Cambiar fuente → Aozora").
+const SHORT_TITLES = new Set([
+  "羅生門",
+  "蜘蛛の糸",
+  "走れメロス",
+  "注文の多い料理店",
+  "セロ弾きのゴーシュ",
+  "檸檬",
+  "ごん狐",
+]);
+function randomWork() {
+  const pool = AOZORA_WORKS.filter((w) => SHORT_TITLES.has(w.title));
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+/** Identidad de un token para el modelo del estudiante. */
 function identityOf(t: AnnotatedToken): string {
   return t.entry?.word ?? t.baseForm;
 }
 
-// Estado del lector, persistente entre navegaciones de pestañas.
 interface ReaderState {
-  mode: "source" | "reading";
   text: string;
   lines: AnnotatedToken[][];
-  tracked: Set<string>; // conocidas ∪ en el mazo (para el resaltado)
-  known: Set<string>; // solo dominadas (para la comprensión)
+  tracked: Set<string>; // conocidas ∪ en el mazo (resaltado)
+  known: Set<string>; // dominadas (comprensión)
+  loaded: boolean; // ya se intentó la carga inicial
 }
 const state: ReaderState = {
-  mode: "source",
   text: "",
   lines: [],
   tracked: new Set(),
   known: new Set(),
+  loaded: false,
 };
 
-const EXAMPLE = "日本語を勉強する。\n今日はとてもいい天気です。";
-
-// Iconos de las tarjetas de fuente (line icons).
-const ICON = {
-  photo: `<svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>`,
-  wikipedia: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20"/></svg>`,
-  news: `<svg viewBox="0 0 24 24"><path d="M4 4h13v16H4z"/><path d="M17 8h3v10a2 2 0 0 1-2 2H4"/><path d="M7 8h7M7 12h7M7 16h5"/></svg>`,
-  aozora: `<svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`,
-};
-
-/** Estadísticas del último texto analizado (para la pantalla de Progreso). */
+/** Estadísticas del último texto analizado (para Progreso). */
 export function getReadingStats(): { total: number; known: number } | null {
   if (state.lines.length === 0) return null;
   let total = 0;
@@ -60,217 +75,134 @@ export function getReadingStats(): { total: number; known: number } | null {
 
 export function ReadScreen(): HTMLElement {
   const root = document.createElement("section");
-  root.className = "screen";
-  render(root);
+  root.className = "screen screen--reader";
+  renderShell(root);
+
+  if (state.lines.length > 0) {
+    paintReading(root);
+  } else if (!state.loaded) {
+    void initialLoad(root);
+  } else {
+    showBodyState(root, "No hay lectura. Pulsa “Cambiar fuente” para elegir una.");
+  }
   return root;
 }
 
-function render(root: HTMLElement) {
-  if (state.mode === "reading") renderReading(root);
-  else renderSource(root);
-}
-
-// ---------- Vista: elegir fuente ----------
-function renderSource(root: HTMLElement) {
+// ---------- Estructura fija del lector ----------
+function renderShell(root: HTMLElement) {
   root.innerHTML = `
-    <h1 class="screen__title">Leer</h1>
-    <p class="screen__subtitle">Pega texto japonés, o tráelo de una fuente, y pulsa Analizar.</p>
-
-    <textarea id="src" class="source__textarea" lang="ja"
-      placeholder="ここに日本語のテキストを貼り付け…"></textarea>
-    <button class="btn btn--primary btn--block" id="analyze">Analizar</button>
-    <button class="link-btn" id="example">Probar con una oración de ejemplo</button>
-
-    <div class="source-divider"><span>o trae texto de</span></div>
-    <div class="source-grid">
-      ${sourceCard("photo", ICON.photo, "Foto o cámara", "Reconoce texto de una imagen")}
-      ${sourceCard("wikipedia", ICON.wikipedia, "Wikipedia", "Artículos sobre cualquier tema")}
-      ${sourceCard("news", ICON.news, "Noticias", "Wikinews en japonés")}
-      ${sourceCard("aozora", ICON.aozora, "Aozora Bunko", "Literatura clásica gratuita")}
+    <div class="reader__toolbar">
+      <div class="reader__actions">
+        <button class="btn btn--ghost" id="reroll" title="Otro artículo al azar">↻ Otra</button>
+        <button class="btn" id="change">Cambiar fuente</button>
+      </div>
+      <span class="comprehension-chip" id="comprehension" hidden></span>
     </div>
-
-    <input type="file" id="photo-input" accept="image/*" capture="environment" hidden />
-    <div class="ocr-status" id="ocr-status" hidden>
-      <span id="ocr-label"></span>
-      <div class="dict-bar__progress"><span id="ocr-prog"></span></div>
+    <div class="reader__layout">
+      <div class="reader__main">
+        <div class="reader__body" id="body" lang="ja"></div>
+      </div>
+      <aside class="reader__aside" id="aside">
+        <p class="reader__aside-hint">Toca una palabra para ver su definición aquí.</p>
+      </aside>
     </div>
-
-    <div class="dict-bar" id="dict-bar"></div>
   `;
 
-  const textarea = root.querySelector<HTMLTextAreaElement>("#src")!;
-  textarea.value = state.text;
-  textarea.addEventListener("input", () => {
-    state.text = textarea.value;
+  root.querySelector<HTMLButtonElement>("#reroll")!.addEventListener("click", () => {
+    void loadRandomReading(root);
   });
-
-  setupOcr(root, textarea);
-  setupSourceCards(root, textarea);
-
-  root.querySelector<HTMLButtonElement>("#example")!.addEventListener("click", () => {
-    textarea.value = EXAMPLE;
-    state.text = EXAMPLE;
-    textarea.focus();
-  });
-
-  const analyzeBtn = root.querySelector<HTMLButtonElement>("#analyze")!;
-  analyzeBtn.addEventListener("click", async () => {
-    state.text = textarea.value;
-    if (!state.text.trim()) {
-      textarea.focus();
-      return;
-    }
-    analyzeBtn.disabled = true;
-    analyzeBtn.textContent = "Analizando…";
-    try {
-      await analyzeIntoState(state.text);
-      state.mode = "reading";
-      render(root);
-    } catch (err) {
-      analyzeBtn.disabled = false;
-      analyzeBtn.textContent = "Analizar";
-      console.error(err);
-      alert("No se pudo analizar el texto. ¿Se cargó el diccionario kuromoji?");
-    }
-  });
-
-  void renderDictBar(root.querySelector<HTMLElement>("#dict-bar")!);
-}
-
-function sourceCard(src: string, icon: string, title: string, desc: string): string {
-  return `
-    <button class="source-card" data-src="${src}">
-      <span class="source-card__icon" aria-hidden="true">${icon}</span>
-      <span class="source-card__title">${title}</span>
-      <span class="source-card__desc">${desc}</span>
-    </button>
-  `;
-}
-
-function setupSourceCards(root: HTMLElement, textarea: HTMLTextAreaElement) {
-  const fill = (text: string) => {
-    textarea.value = text;
-    state.text = text;
-    textarea.scrollIntoView({ behavior: "smooth", block: "start" });
-    root.querySelector<HTMLButtonElement>("#analyze")?.focus();
-  };
-
-  root.querySelectorAll<HTMLButtonElement>(".source-card").forEach((card) => {
-    const src = card.dataset.src;
-    card.addEventListener("click", () => {
-      if (src === "photo") {
-        root.querySelector<HTMLInputElement>("#photo-input")!.click();
-      } else if (src === "wikipedia" || src === "news" || src === "aozora") {
-        openSourceSheet(src as SourceKind, fill);
-      }
-    });
+  root.querySelector<HTMLButtonElement>("#change")!.addEventListener("click", () => {
+    openChooser((text) => void analyzeAndShow(root, text));
   });
 }
 
-function setupOcr(root: HTMLElement, textarea: HTMLTextAreaElement) {
-  const input = root.querySelector<HTMLInputElement>("#photo-input")!;
-  const statusEl = root.querySelector<HTMLElement>("#ocr-status")!;
-  const labelEl = root.querySelector<HTMLElement>("#ocr-label")!;
-  const progEl = root.querySelector<HTMLElement>("#ocr-prog")!;
-
-  input.addEventListener("change", async () => {
-    const file = input.files?.[0];
-    if (!file) return;
-    statusEl.hidden = false;
-    labelEl.textContent = "Preparando…";
-    progEl.style.width = "0%";
-
-    const onProgress = (p: OcrProgress) => {
-      labelEl.textContent = p.message;
-      progEl.style.width = `${Math.round(p.ratio * 100)}%`;
-    };
-    try {
-      const text = await recognizeImage(file, onProgress);
-      if (text) {
-        textarea.value = text;
-        state.text = text;
-        labelEl.textContent = "Texto detectado. Revísalo y pulsa Analizar.";
-      } else {
-        labelEl.textContent = "No se detectó texto. Prueba con una foto más nítida.";
-      }
-    } catch (err) {
-      console.error(err);
-      labelEl.textContent = "Error en el OCR. Reintenta.";
-    } finally {
-      input.value = ""; // permitir re-subir la misma imagen
-    }
-  });
+function showBodyState(root: HTMLElement, message: string) {
+  const body = root.querySelector<HTMLElement>("#body");
+  if (body) body.innerHTML = `<p class="reader__state">${message}</p>`;
 }
 
-async function renderDictBar(bar: HTMLElement) {
-  const status = await getDictStatus();
-  if (status.source === "full") {
-    bar.innerHTML = `<span>Diccionario completo · ${status.entryCount.toLocaleString("es")} palabras</span>`;
-    return;
+// ---------- Carga ----------
+async function initialLoad(root: HTMLElement) {
+  state.loaded = true;
+  await ensureDictionary(root);
+  const saved = localStorage.getItem(LAST_TEXT_KEY);
+  if (saved && saved.trim()) {
+    await analyzeAndShow(root, saved);
+  } else {
+    await loadRandomReading(root);
   }
-
-  bar.innerHTML = `
-    <span id="dict-label">Diccionario básico (${status.entryCount.toLocaleString("es")} palabras)</span>
-    <button class="btn" id="dict-dl">Descargar completo</button>
-  `;
-
-  bar.querySelector<HTMLButtonElement>("#dict-dl")!.addEventListener("click", async () => {
-    bar.innerHTML = `
-      <span id="dict-label">Preparando…</span>
-      <div class="dict-bar__progress"><span id="dict-prog"></span></div>
-    `;
-    const labelEl = bar.querySelector<HTMLElement>("#dict-label")!;
-    const progEl = bar.querySelector<HTMLElement>("#dict-prog")!;
-    const onProgress = (p: LoadProgress) => {
-      labelEl.textContent = p.message;
-      if (p.ratio !== undefined) progEl.style.width = `${Math.round(p.ratio * 100)}%`;
-    };
-    try {
-      const result = await loadFullDictionary(onProgress);
-      bar.innerHTML = `<span>Diccionario completo · ${result.entryCount.toLocaleString("es")} palabras</span>`;
-    } catch (err) {
-      console.error(err);
-      labelEl.textContent = "Error al descargar. Reintenta más tarde.";
-    }
-  });
 }
 
-// ---------- Análisis ----------
+/** Asegura el diccionario completo la primera vez (es local, ~1.4 MB). */
+async function ensureDictionary(root: HTMLElement) {
+  const status = await getDictStatus();
+  if (status.source === "full") return;
+  showBodyState(root, "Preparando el diccionario… (solo la primera vez)");
+  try {
+    await loadFullDictionary((p) =>
+      showBodyState(root, `Diccionario: ${p.message}`)
+    );
+  } catch (err) {
+    // Si falla, seguimos con el diccionario básico (no bloquea la lectura).
+    console.error(err);
+  }
+}
+
+/** Carga una obra de Aozora al azar (literatura con vocabulario estándar). */
+async function loadRandomReading(root: HTMLElement) {
+  showBodyState(root, "Cargando una lectura…");
+  try {
+    const text = await fetchAozoraText(randomWork().path);
+    await analyzeAndShow(root, text || EXAMPLE);
+  } catch {
+    // Sin conexión: cae a un texto de ejemplo para que siempre haya algo que leer.
+    await analyzeAndShow(root, EXAMPLE);
+  }
+}
+
+async function analyzeAndShow(root: HTMLElement, text: string) {
+  const clean = clip(text.trim());
+  if (!clean) return;
+  showBodyState(root, "Analizando…");
+  try {
+    await analyzeIntoState(clean);
+    state.text = clean;
+    try {
+      localStorage.setItem(LAST_TEXT_KEY, clean);
+    } catch {
+      /* almacenamiento lleno: no es crítico */
+    }
+    paintReading(root);
+  } catch (err) {
+    console.error(err);
+    showBodyState(root, "No se pudo analizar el texto. Reintenta.");
+  }
+}
+
 async function analyzeIntoState(text: string) {
   const [knownSet, deckSet] = await Promise.all([getKnownSet(), getDeckWordSet()]);
   state.known = knownSet;
   state.tracked = new Set([...knownSet, ...deckSet]);
 
-  // Tokeniza línea por línea para conservar los saltos de párrafo.
   const rawLines = text.split("\n");
   state.lines = await Promise.all(
     rawLines.map((line) => (line.trim() ? analyzeText(line) : Promise.resolve([])))
   );
 }
 
-// ---------- Vista: lectura ----------
-function renderReading(root: HTMLElement) {
-  root.innerHTML = `
-    <div class="reader__toolbar">
-      <button class="btn btn--ghost" id="new-text">‹ Nuevo texto</button>
-      <span class="comprehension-chip" id="comprehension"></span>
-    </div>
-    <p class="reader__hint">
-      Toca una palabra para ver su lectura y significado. Las resaltadas son nuevas para ti.
-    </p>
-    <div class="reader__body" id="body" lang="ja"></div>
-  `;
-
-  root.querySelector<HTMLButtonElement>("#new-text")!.addEventListener("click", () => {
-    state.mode = "source";
-    render(root);
-  });
-
+// ---------- Pintado de la lectura ----------
+function paintReading(root: HTMLElement) {
+  resetAside(root);
   const body = root.querySelector<HTMLElement>("#body")!;
-  for (const line of state.lines) {
-    body.appendChild(renderLine(line, root));
-  }
+  body.replaceChildren(...state.lines.map((line) => renderLine(line, root)));
   updateComprehension(root);
+}
+
+function resetAside(root: HTMLElement) {
+  const aside = root.querySelector<HTMLElement>("#aside");
+  if (aside) {
+    aside.innerHTML = `<p class="reader__aside-hint">Toca una palabra para ver su definición aquí.</p>`;
+  }
 }
 
 function renderLine(tokens: AnnotatedToken[], root: HTMLElement): HTMLElement {
@@ -281,14 +213,11 @@ function renderLine(tokens: AnnotatedToken[], root: HTMLElement): HTMLElement {
     return p;
   }
   const sentence = tokens.map((t) => t.surface).join("");
-  for (const t of tokens) {
-    p.appendChild(renderToken(t, root, sentence));
-  }
+  for (const t of tokens) p.appendChild(renderToken(t, root, sentence));
   return p;
 }
 
 function renderToken(t: AnnotatedToken, root: HTMLElement, sentence: string): Node {
-  // Partículas, signos y demás: texto plano no tocable.
   if (!t.isContent) {
     const span = document.createElement("span");
     span.className = "tok tok--plain";
@@ -314,30 +243,39 @@ function renderToken(t: AnnotatedToken, root: HTMLElement, sentence: string): No
     span.textContent = t.surface;
   }
 
-  span.addEventListener("click", () => {
-    void openWordSheet(
-      {
-        identity,
-        word: t.entry?.word ?? t.baseForm,
-        reading: t.entry?.reading || t.reading,
-        meaning: t.entry?.meaning,
-        pos: t.entry?.pos,
-        sentence,
-      },
-      {
-        onTracked: (id) => {
-          state.tracked.add(id);
-          // Quita el resaltado de todas las apariciones de esa palabra.
-          root
-            .querySelectorAll<HTMLElement>(`.tok[data-identity="${cssEscape(id)}"]`)
-            .forEach((el) => el.classList.remove("tok--new"));
-          updateComprehension(root);
-        },
-      }
-    );
-  });
-
+  span.addEventListener("click", () => showWord(root, t, identity, sentence));
   return span;
+}
+
+function showWord(
+  root: HTMLElement,
+  t: AnnotatedToken,
+  identity: string,
+  sentence: string
+) {
+  const data = {
+    identity,
+    word: t.entry?.word ?? t.baseForm,
+    reading: t.entry?.reading || t.reading,
+    meaning: t.entry?.meaning,
+    pos: t.entry?.pos,
+    sentence,
+  };
+  const onTracked = (id: string) => {
+    state.tracked.add(id);
+    root
+      .querySelectorAll<HTMLElement>(`.tok[data-identity="${cssEscape(id)}"]`)
+      .forEach((el) => el.classList.remove("tok--new"));
+    updateComprehension(root);
+  };
+
+  // Escritorio: panel lateral. Móvil: hoja inferior.
+  if (window.matchMedia(WIDE).matches) {
+    const aside = root.querySelector<HTMLElement>("#aside")!;
+    aside.replaceChildren(buildWordDetail(data, { onTracked }));
+  } else {
+    openWordSheet(data, { onTracked });
+  }
 }
 
 function updateComprehension(root: HTMLElement) {
@@ -353,15 +291,14 @@ function updateComprehension(root: HTMLElement) {
   const el = root.querySelector<HTMLElement>("#comprehension");
   if (!el) return;
   if (total === 0) {
-    el.textContent = "";
+    el.hidden = true;
     return;
   }
   const pct = Math.round((known / total) * 100);
-  const nuevas = total - known;
-  el.textContent = `${pct}% · ${nuevas} nueva${nuevas === 1 ? "" : "s"}`;
+  el.hidden = false;
+  el.textContent = `${pct}% comprensión`;
 }
 
-// Escapa un valor para usarlo dentro de un selector de atributo.
 function cssEscape(value: string): string {
   if (typeof CSS !== "undefined" && CSS.escape) return CSS.escape(value);
   return value.replace(/["\\]/g, "\\$&");
