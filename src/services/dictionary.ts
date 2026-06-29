@@ -1,4 +1,5 @@
 import { db, type DictEntry } from "../data/db.ts";
+import { hasKanji } from "./kana.ts";
 
 export interface LookupResult {
   word: string;
@@ -42,22 +43,31 @@ function toResult(e: DictEntry): LookupResult {
 
 /**
  * Busca una palabra en el diccionario local.
- * Prueba en orden: forma base, superficie, lectura. Devuelve la mejor coincidencia.
+ * Prueba por escritura (forma base y superficie). Solo cae a la lectura cuando la
+ * palabra NO tiene kanji, para evitar devolver un homófono con kanji distinto
+ * (p. ej. 館 → 勘, ambos «かん»).
  */
 export async function lookup(
   baseForm: string,
   surface?: string,
   reading?: string
 ): Promise<LookupResult | undefined> {
-  const candidates = [baseForm, surface, reading].filter(
-    (k): k is string => !!k
-  );
+  const writingKeys = [baseForm, surface].filter((k): k is string => !!k);
 
-  for (const key of candidates) {
+  for (const key of writingKeys) {
     const entries = await db.dict.where("key").equals(key).toArray();
     const best = chooseBest(entries, reading);
     if (best) return toResult(best);
   }
+
+  // Fallback por lectura solo para palabras sin kanji (kana puro).
+  const wordHasKanji = hasKanji(baseForm) || (surface ? hasKanji(surface) : false);
+  if (reading && !wordHasKanji) {
+    const entries = await db.dict.where("key").equals(reading).toArray();
+    const best = chooseBest(entries, reading);
+    if (best) return toResult(best);
+  }
+
   return undefined;
 }
 
