@@ -154,6 +154,9 @@ function renderGrammar(box: HTMLElement, segments: GrammarSegment[]) {
   for (const seg of segments) {
     const li = document.createElement("li");
     li.className = "grammar__item";
+
+    const head = document.createElement("div");
+    head.className = "grammar__head";
     const w = document.createElement("span");
     w.className = "grammar__w";
     w.lang = "ja";
@@ -161,10 +164,19 @@ function renderGrammar(box: HTMLElement, segments: GrammarSegment[]) {
       seg.reading && seg.reading !== seg.surface
         ? `${seg.surface}（${seg.reading}）`
         : seg.surface;
+    head.appendChild(w);
+    if (seg.meaning) {
+      const g = document.createElement("span");
+      g.className = "grammar__gloss";
+      g.textContent = seg.meaning;
+      head.appendChild(g);
+    }
+
     const r = document.createElement("span");
     r.className = "grammar__role";
     r.textContent = seg.role;
-    li.append(w, r);
+
+    li.append(head, r);
     ul.appendChild(li);
   }
   box.appendChild(ul);

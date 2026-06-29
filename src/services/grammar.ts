@@ -1,5 +1,6 @@
 import { tokenizeRaw } from "./tokenizer.ts";
 import { kataToHira } from "./kana.ts";
+import { lookup } from "./dictionary.ts";
 
 /**
  * Explicación gramatical LOCAL (offline, gratis): desglosa una oración en sus
@@ -10,7 +11,19 @@ import { kataToHira } from "./kana.ts";
 export interface GrammarSegment {
   surface: string;
   reading: string; // hiragana (vacío si no aplica)
+  meaning?: string; // significado del diccionario (palabras de contenido)
   role: string; // función gramatical en español
+}
+
+// Categorías de "contenido" a las que les buscamos significado en el diccionario.
+const CONTENT_POS = new Set(["名詞", "動詞", "形容詞", "副詞"]);
+
+/** Acorta una glosa larga al primer sentido (para un glosado legible). */
+function shortMeaning(meaning?: string): string | undefined {
+  if (!meaning) return undefined;
+  const firstSense = meaning.split(" / ")[0];
+  const glosses = firstSense.split(";").map((g) => g.trim()).filter(Boolean);
+  return glosses.slice(0, 2).join("; ");
 }
 
 // Partículas (助詞) por superficie.
@@ -137,19 +150,28 @@ function describe(f: {
   }
 }
 
-/** Desglosa una oración en segmentos con su función gramatical (local, offline). */
+/** Desglosa una oración en segmentos con lectura, significado y función (local, offline). */
 export async function analyzeGrammar(sentence: string): Promise<GrammarSegment[]> {
   const tokens = await tokenizeRaw(sentence);
-  const out: GrammarSegment[] = [];
-  for (const f of tokens) {
-    const role = describe(f);
-    if (!role) continue;
-    out.push({
-      surface: f.surface_form,
-      reading:
-        f.reading && f.reading !== "*" ? kataToHira(f.reading) : "",
-      role,
-    });
-  }
-  return out;
+
+  const kept = tokens
+    .map((f) => ({ f, role: describe(f) }))
+    .filter((x): x is { f: (typeof tokens)[number]; role: string } => x.role !== null);
+
+  // Busca el significado de las palabras de contenido en el diccionario.
+  const meanings = await Promise.all(
+    kept.map(({ f }) => {
+      if (!CONTENT_POS.has(f.pos)) return Promise.resolve(undefined);
+      const base = f.basic_form && f.basic_form !== "*" ? f.basic_form : f.surface_form;
+      const reading = f.reading && f.reading !== "*" ? kataToHira(f.reading) : undefined;
+      return lookup(base, f.surface_form, reading);
+    })
+  );
+
+  return kept.map(({ f, role }, i) => ({
+    surface: f.surface_form,
+    reading: f.reading && f.reading !== "*" ? kataToHira(f.reading) : "",
+    meaning: shortMeaning(meanings[i]?.meaning),
+    role,
+  }));
 }
