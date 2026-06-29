@@ -100,10 +100,33 @@ body {
   color: var(--indigo);
 }
 
-.bottom-nav__glyph {
-  font-size: 1.05rem;
-  font-weight: 600;
-  font-family: var(--font-jp);
+.bottom-nav__icon {
+  position: relative;
+  display: inline-flex;
+}
+.bottom-nav__icon svg {
+  width: 24px;
+  height: 24px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.bottom-nav__badge {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--vermilion);
+  color: var(--paper);
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
 }
 
 /* Botones */
@@ -122,4 +145,31 @@ body {
   background: var(--indigo);
   border-color: var(--indigo);
   color: var(--paper);
+}
+
+.btn--block {
+  display: block;
+  width: 100%;
+  font-size: 1.05rem;
+  padding: var(--space-4);
+}
+
+.btn--ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--indigo);
+  padding: var(--space-2) var(--space-3);
+}
+
+.link-btn {
+  display: inline-block;
+  background: none;
+  border: none;
+  color: var(--indigo);
+  font-family: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: var(--space-2) 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }

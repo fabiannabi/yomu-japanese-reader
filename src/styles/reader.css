@@ -33,6 +33,68 @@
   font-size: 0.9rem;
 }
 
+/* Divisor "o trae texto de" */
+.source-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-5) 0 var(--space-4);
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+.source-divider::before,
+.source-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+/* Cuadrícula de fuentes */
+.source-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+.source-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  text-align: left;
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.source-card:hover {
+  border-color: var(--indigo);
+  background: var(--indigo-tint);
+}
+.source-card__icon svg {
+  width: 26px;
+  height: 26px;
+  stroke: var(--indigo);
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  margin-bottom: var(--space-1);
+}
+.source-card__title {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.source-card__desc {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
 .ocr-status {
   margin-top: var(--space-4);
   display: flex;
@@ -87,10 +149,100 @@
   color: var(--indigo);
 }
 
+.comprehension-chip {
+  font-size: 0.8rem;
+  color: var(--indigo);
+  background: var(--indigo-tint);
+  border-radius: 999px;
+  padding: 4px 12px;
+  white-space: nowrap;
+}
+.reader__hint {
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  margin: 0 0 var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
 .reader__body {
   font-family: var(--font-jp);
   font-size: 1.4rem;
   line-height: 2.4;
+}
+
+/* Hoja de navegación de fuentes (Wikipedia / Noticias / Aozora) */
+.sheet--browse {
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+.sheet__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+.sheet__title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0;
+}
+.sheet__close {
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+}
+.sheet__search {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.sheet__search .field__input {
+  flex: 1;
+  font-family: var(--font-jp);
+}
+.sheet__list {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.browse-item {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3);
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  color: var(--ink);
+  font-family: var(--font-jp);
+  font-size: 1rem;
+  cursor: pointer;
+}
+.browse-item:hover {
+  background: var(--indigo-tint);
+}
+.browse-item__sub {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  font-family: var(--font-jp);
+}
+.sheet__state {
+  padding: var(--space-5) var(--space-3);
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+.sheet__state--err {
+  color: var(--vermilion);
 }
 .reader__line {
   margin: 0 0 var(--space-3);

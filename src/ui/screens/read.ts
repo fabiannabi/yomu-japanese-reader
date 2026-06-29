@@ -9,15 +9,8 @@ import {
   type LoadProgress,
 } from "../../data/jmdict.ts";
 import { openWordSheet } from "../components/word-sheet.ts";
+import { openSourceSheet, type SourceKind } from "../components/source-sheet.ts";
 import { recognizeImage, type OcrProgress } from "../../services/ocr.ts";
-import {
-  randomPages,
-  searchPages,
-  recentPages,
-  fetchExtract,
-  type WikiHost,
-  type WikiPage,
-} from "../../services/wiki.ts";
 
 /** Identidad de un token para el modelo del estudiante (forma de diccionario o superficie). */
 function identityOf(t: AnnotatedToken): string {
@@ -34,13 +27,21 @@ interface ReaderState {
 }
 const state: ReaderState = {
   mode: "source",
-  text: "日本語を勉強する。\n今日はとてもいい天気です。",
+  text: "",
   lines: [],
   tracked: new Set(),
   known: new Set(),
 };
 
 const EXAMPLE = "日本語を勉強する。\n今日はとてもいい天気です。";
+
+// Iconos de las tarjetas de fuente (line icons).
+const ICON = {
+  photo: `<svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>`,
+  wikipedia: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20"/></svg>`,
+  news: `<svg viewBox="0 0 24 24"><path d="M4 4h13v16H4z"/><path d="M17 8h3v10a2 2 0 0 1-2 2H4"/><path d="M7 8h7M7 12h7M7 16h5"/></svg>`,
+  aozora: `<svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`,
+};
 
 /** Estadísticas del último texto analizado (para la pantalla de Progreso). */
 export function getReadingStats(): { total: number; known: number } | null {
@@ -69,45 +70,56 @@ function render(root: HTMLElement) {
   else renderSource(root);
 }
 
-// ---------- Vista: elegir fuente (pegar texto) ----------
+// ---------- Vista: elegir fuente ----------
 function renderSource(root: HTMLElement) {
   root.innerHTML = `
     <h1 class="screen__title">Leer</h1>
-    <p class="screen__subtitle">Pega texto japonés o usa una foto para analizarlo.</p>
-    <div class="dict-bar" id="dict-bar"></div>
-    <label class="source__label" for="src">Texto japonés</label>
-    <textarea id="src" class="source__textarea" lang="ja" placeholder="ここに日本語を貼り付け…"></textarea>
-    <div class="source__actions">
-      <button class="btn btn--primary" id="analyze">Analizar</button>
-      <button class="btn" id="photo">Foto / cámara</button>
-      <button class="btn" id="src-wiki">Wikipedia</button>
-      <button class="btn" id="src-news">Noticias</button>
-      <button class="btn" id="example">Usar ejemplo</button>
+    <p class="screen__subtitle">Pega texto japonés, o tráelo de una fuente, y pulsa Analizar.</p>
+
+    <textarea id="src" class="source__textarea" lang="ja"
+      placeholder="ここに日本語のテキストを貼り付け…"></textarea>
+    <button class="btn btn--primary btn--block" id="analyze">Analizar</button>
+    <button class="link-btn" id="example">Probar con una oración de ejemplo</button>
+
+    <div class="source-divider"><span>o trae texto de</span></div>
+    <div class="source-grid">
+      ${sourceCard("photo", ICON.photo, "Foto o cámara", "Reconoce texto de una imagen")}
+      ${sourceCard("wikipedia", ICON.wikipedia, "Wikipedia", "Artículos sobre cualquier tema")}
+      ${sourceCard("news", ICON.news, "Noticias", "Wikinews en japonés")}
+      ${sourceCard("aozora", ICON.aozora, "Aozora Bunko", "Literatura clásica gratuita")}
     </div>
+
     <input type="file" id="photo-input" accept="image/*" capture="environment" hidden />
     <div class="ocr-status" id="ocr-status" hidden>
       <span id="ocr-label"></span>
       <div class="dict-bar__progress"><span id="ocr-prog"></span></div>
     </div>
-    <div id="source-area"></div>
-    <p class="source__hint">Las palabras nuevas se resaltan; las que ya dominas quedan en texto plano.</p>
+
+    <div class="dict-bar" id="dict-bar"></div>
   `;
 
   const textarea = root.querySelector<HTMLTextAreaElement>("#src")!;
   textarea.value = state.text;
+  textarea.addEventListener("input", () => {
+    state.text = textarea.value;
+  });
 
   setupOcr(root, textarea);
-  setupSources(root, textarea);
+  setupSourceCards(root, textarea);
 
   root.querySelector<HTMLButtonElement>("#example")!.addEventListener("click", () => {
     textarea.value = EXAMPLE;
     state.text = EXAMPLE;
+    textarea.focus();
   });
 
   const analyzeBtn = root.querySelector<HTMLButtonElement>("#analyze")!;
   analyzeBtn.addEventListener("click", async () => {
     state.text = textarea.value;
-    if (!state.text.trim()) return;
+    if (!state.text.trim()) {
+      textarea.focus();
+      return;
+    }
     analyzeBtn.disabled = true;
     analyzeBtn.textContent = "Analizando…";
     try {
@@ -125,128 +137,46 @@ function renderSource(root: HTMLElement) {
   void renderDictBar(root.querySelector<HTMLElement>("#dict-bar")!);
 }
 
-function setupSources(root: HTMLElement, textarea: HTMLTextAreaElement) {
-  const area = root.querySelector<HTMLElement>("#source-area")!;
-
-  root
-    .querySelector<HTMLButtonElement>("#src-wiki")!
-    .addEventListener("click", () => renderWikiPanel(area, textarea, "ja.wikipedia.org"));
-  root
-    .querySelector<HTMLButtonElement>("#src-news")!
-    .addEventListener("click", () => renderWikiPanel(area, textarea, "ja.wikinews.org"));
+function sourceCard(src: string, icon: string, title: string, desc: string): string {
+  return `
+    <button class="source-card" data-src="${src}">
+      <span class="source-card__icon" aria-hidden="true">${icon}</span>
+      <span class="source-card__title">${title}</span>
+      <span class="source-card__desc">${desc}</span>
+    </button>
+  `;
 }
 
-// Carga el texto de un artículo en el cuadro y deja listo para Analizar.
-async function loadArticle(
-  host: WikiHost,
-  title: string,
-  area: HTMLElement,
-  textarea: HTMLTextAreaElement
-) {
-  area.innerHTML = `<p class="source__hint">Cargando “${escapeText(title)}”…</p>`;
-  try {
-    const text = await fetchExtract(host, title);
-    if (!text) {
-      area.innerHTML = `<p class="explain__error">El artículo no tiene texto legible. Prueba otro.</p>`;
-      return;
-    }
+function setupSourceCards(root: HTMLElement, textarea: HTMLTextAreaElement) {
+  const fill = (text: string) => {
     textarea.value = text;
     state.text = text;
-    area.innerHTML = `<p class="source__hint">“${escapeText(title)}” cargado. Pulsa Analizar.</p>`;
-  } catch {
-    area.innerHTML = `<p class="explain__error">No se pudo cargar el artículo. Reintenta.</p>`;
-  }
-}
-
-function renderList(
-  pages: WikiPage[],
-  host: WikiHost,
-  listEl: HTMLElement,
-  area: HTMLElement,
-  textarea: HTMLTextAreaElement
-) {
-  if (pages.length === 0) {
-    listEl.innerHTML = `<p class="source__hint">Sin resultados.</p>`;
-    return;
-  }
-  const ul = document.createElement("ul");
-  ul.className = "source-list";
-  for (const p of pages) {
-    const li = document.createElement("li");
-    li.className = "source-list__item";
-    li.textContent = p.title;
-    li.addEventListener("click", () => loadArticle(host, p.title, area, textarea));
-    ul.appendChild(li);
-  }
-  listEl.replaceChildren(ul);
-}
-
-function renderWikiPanel(
-  area: HTMLElement,
-  textarea: HTMLTextAreaElement,
-  host: WikiHost
-) {
-  const isNews = host === "ja.wikinews.org";
-  area.innerHTML = `
-    <div class="source__row" style="margin-top:var(--space-3)">
-      <input class="field__input" id="wiki-q" type="search"
-        placeholder="${isNews ? "Buscar noticias…" : "Buscar tema…"}" />
-      <button class="btn" id="wiki-search">Buscar</button>
-      <button class="btn" id="wiki-rand">${isNews ? "Recientes" : "Al azar"}</button>
-    </div>
-    <div id="wiki-list"></div>
-  `;
-  const input = area.querySelector<HTMLInputElement>("#wiki-q")!;
-  const listEl = area.querySelector<HTMLElement>("#wiki-list")!;
-
-  const doSearch = async () => {
-    listEl.innerHTML = `<p class="source__hint">Buscando…</p>`;
-    try {
-      renderList(await searchPages(host, input.value), host, listEl, area, textarea);
-    } catch {
-      listEl.innerHTML = `<p class="explain__error">No se pudo buscar. Reintenta.</p>`;
-    }
-  };
-  const doBrowse = async () => {
-    listEl.innerHTML = `<p class="source__hint">Cargando…</p>`;
-    try {
-      let pages = isNews ? await recentPages(host) : await randomPages(host);
-      // Wikinews ja tiene poca actividad: si no hay recientes, cae a al azar.
-      if (isNews && pages.length === 0) pages = await randomPages(host);
-      renderList(pages, host, listEl, area, textarea);
-    } catch {
-      listEl.innerHTML = `<p class="explain__error">No se pudo cargar. Reintenta.</p>`;
-    }
+    textarea.scrollIntoView({ behavior: "smooth", block: "start" });
+    root.querySelector<HTMLButtonElement>("#analyze")?.focus();
   };
 
-  area.querySelector<HTMLButtonElement>("#wiki-search")!.addEventListener("click", doSearch);
-  area.querySelector<HTMLButtonElement>("#wiki-rand")!.addEventListener("click", doBrowse);
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") doSearch();
+  root.querySelectorAll<HTMLButtonElement>(".source-card").forEach((card) => {
+    const src = card.dataset.src;
+    card.addEventListener("click", () => {
+      if (src === "photo") {
+        root.querySelector<HTMLInputElement>("#photo-input")!.click();
+      } else if (src === "wikipedia" || src === "news" || src === "aozora") {
+        openSourceSheet(src as SourceKind, fill);
+      }
+    });
   });
-
-  // Carga inicial: noticias recientes o artículos al azar.
-  void doBrowse();
-}
-
-function escapeText(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function setupOcr(root: HTMLElement, textarea: HTMLTextAreaElement) {
-  const photoBtn = root.querySelector<HTMLButtonElement>("#photo")!;
   const input = root.querySelector<HTMLInputElement>("#photo-input")!;
   const statusEl = root.querySelector<HTMLElement>("#ocr-status")!;
   const labelEl = root.querySelector<HTMLElement>("#ocr-label")!;
   const progEl = root.querySelector<HTMLElement>("#ocr-prog")!;
 
-  photoBtn.addEventListener("click", () => input.click());
-
   input.addEventListener("change", async () => {
     const file = input.files?.[0];
     if (!file) return;
     statusEl.hidden = false;
-    photoBtn.disabled = true;
     labelEl.textContent = "Preparando…";
     progEl.style.width = "0%";
 
@@ -267,7 +197,6 @@ function setupOcr(root: HTMLElement, textarea: HTMLTextAreaElement) {
       console.error(err);
       labelEl.textContent = "Error en el OCR. Reintenta.";
     } finally {
-      photoBtn.disabled = false;
       input.value = ""; // permitir re-subir la misma imagen
     }
   });
@@ -275,18 +204,17 @@ function setupOcr(root: HTMLElement, textarea: HTMLTextAreaElement) {
 
 async function renderDictBar(bar: HTMLElement) {
   const status = await getDictStatus();
-  const label =
-    status.source === "full"
-      ? `Diccionario completo · ${status.entryCount.toLocaleString("es")} entradas`
-      : `Diccionario inicial · ${status.entryCount.toLocaleString("es")} entradas`;
+  if (status.source === "full") {
+    bar.innerHTML = `<span>Diccionario completo · ${status.entryCount.toLocaleString("es")} palabras</span>`;
+    return;
+  }
 
   bar.innerHTML = `
-    <span id="dict-label">${label}</span>
-    ${status.source === "full" ? "" : '<button class="btn" id="dict-dl">Descargar completo</button>'}
+    <span id="dict-label">Diccionario básico (${status.entryCount.toLocaleString("es")} palabras)</span>
+    <button class="btn" id="dict-dl">Descargar completo</button>
   `;
 
-  const dl = bar.querySelector<HTMLButtonElement>("#dict-dl");
-  dl?.addEventListener("click", async () => {
+  bar.querySelector<HTMLButtonElement>("#dict-dl")!.addEventListener("click", async () => {
     bar.innerHTML = `
       <span id="dict-label">Preparando…</span>
       <div class="dict-bar__progress"><span id="dict-prog"></span></div>
@@ -299,7 +227,7 @@ async function renderDictBar(bar: HTMLElement) {
     };
     try {
       const result = await loadFullDictionary(onProgress);
-      bar.innerHTML = `<span>Diccionario completo · ${result.entryCount.toLocaleString("es")} entradas</span>`;
+      bar.innerHTML = `<span>Diccionario completo · ${result.entryCount.toLocaleString("es")} palabras</span>`;
     } catch (err) {
       console.error(err);
       labelEl.textContent = "Error al descargar. Reintenta más tarde.";
@@ -324,9 +252,12 @@ async function analyzeIntoState(text: string) {
 function renderReading(root: HTMLElement) {
   root.innerHTML = `
     <div class="reader__toolbar">
-      <button class="btn" id="new-text">Nuevo texto</button>
-      <span class="reader__comprehension" id="comprehension"></span>
+      <button class="btn btn--ghost" id="new-text">‹ Nuevo texto</button>
+      <span class="comprehension-chip" id="comprehension"></span>
     </div>
+    <p class="reader__hint">
+      Toca una palabra para ver su lectura y significado. Las resaltadas son nuevas para ti.
+    </p>
     <div class="reader__body" id="body" lang="ja"></div>
   `;
 
@@ -427,7 +358,7 @@ function updateComprehension(root: HTMLElement) {
   }
   const pct = Math.round((known / total) * 100);
   const nuevas = total - known;
-  el.innerHTML = `Comprensión <strong>${pct}%</strong> · ${nuevas} nueva${nuevas === 1 ? "" : "s"}`;
+  el.textContent = `${pct}% · ${nuevas} nueva${nuevas === 1 ? "" : "s"}`;
 }
 
 // Escapa un valor para usarlo dentro de un selector de atributo.
