@@ -3,6 +3,7 @@ import { addToDeck, isInDeck } from "../../services/deck.ts";
 import { isKnown } from "../../services/known-words.ts";
 import { explainGrammar } from "../../services/llm.ts";
 import { analyzeGrammar, type GrammarSegment } from "../../services/grammar.ts";
+import { lookup } from "../../services/dictionary.ts";
 import { hasApiKey } from "../../services/settings.ts";
 
 export interface WordSheetData {
@@ -67,13 +68,43 @@ export function buildPhraseDetail(
   el.innerHTML = `
     <p class="sheet__reading">Frase seleccionada</p>
     <h2 class="sheet__word phrase-detail__text" lang="ja"></h2>
+    <p class="sheet__meaning" id="phrase-meaning">…</p>
     <div class="explain" id="explain"></div>
   `;
   el.querySelector<HTMLElement>(".phrase-detail__text")!.textContent =
-    text.length > 80 ? `${text.slice(0, 80)}…` : text;
+    text.length > 120 ? `${text.slice(0, 120)}…` : text;
 
+  const meaningEl = el.querySelector<HTMLElement>("#phrase-meaning")!;
   const box = el.querySelector<HTMLElement>("#explain")!;
-  void renderGrammarFor(box, text, onClose);
+
+  void (async () => {
+    box.innerHTML = `<p class="explain__loading">Analizando gramática…</p>`;
+    try {
+      const [segments, exact] = await Promise.all([
+        analyzeGrammar(text),
+        lookup(text),
+      ]);
+      // Significado de conjunto: definición exacta si existe; si no, literal.
+      if (exact?.meaning) {
+        meaningEl.textContent = exact.meaning;
+      } else {
+        const literal = segments
+          .map((s) => s.meaning)
+          .filter(Boolean)
+          .join(" · ");
+        meaningEl.textContent = literal
+          ? `Literal: ${literal}`
+          : "Sin significado de conjunto en el diccionario.";
+        meaningEl.classList.add("phrase-detail__literal");
+      }
+      renderGrammar(box, segments);
+      await offerAi(box, text, onClose);
+    } catch {
+      meaningEl.textContent = "";
+      box.innerHTML = `<p class="explain__error">No se pudo analizar la frase.</p>`;
+    }
+  })();
+
   return el;
 }
 

@@ -101,6 +101,10 @@
   line-height: 1.5;
   margin: 0 0 var(--space-3);
 }
+.phrase-detail__literal {
+  color: var(--ink-soft);
+  font-style: italic;
+}
 
 /* En móvil/tablet angosto no hay panel lateral: el detalle sale como hoja. */
 @media (max-width: 899px) {
