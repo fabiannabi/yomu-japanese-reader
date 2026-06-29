@@ -47,8 +47,9 @@ async function render(root: HTMLElement) {
     </div>
 
     <p class="settings-note">
-      Fuente NHK News Web Easy: experimental. NHK no permite el acceso directo desde el navegador
-      (CORS), así que puede no cargar; mientras tanto, pega el texto en la pestaña Leer.
+      Fuente NHK News Web Easy: no disponible. NHK migró su sitio y cerró el acceso
+      público a su lista de noticias, así que de momento no se puede leer automáticamente;
+      copia el texto del artículo y pégalo en la pestaña Leer.
     </p>
   `;
 

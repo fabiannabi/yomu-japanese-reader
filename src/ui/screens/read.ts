@@ -10,7 +10,6 @@ import {
 } from "../../data/jmdict.ts";
 import { openWordSheet } from "../components/word-sheet.ts";
 import { recognizeImage, type OcrProgress } from "../../services/ocr.ts";
-import { fetchNhkList, fetchNhkArticle } from "../../services/nhk.ts";
 
 /** Identidad de un token para el modelo del estudiante (forma de diccionario o superficie). */
 function identityOf(t: AnnotatedToken): string {
@@ -73,7 +72,7 @@ function renderSource(root: HTMLElement) {
     <div class="source__actions">
       <button class="btn btn--primary" id="analyze">Analizar</button>
       <button class="btn" id="photo">Foto / cámara</button>
-      <button class="btn" id="nhk">NHK (experimental)</button>
+      <button class="btn" id="nhk">NHK</button>
       <button class="btn" id="example">Usar ejemplo</button>
     </div>
     <input type="file" id="photo-input" accept="image/*" capture="environment" hidden />
@@ -89,7 +88,7 @@ function renderSource(root: HTMLElement) {
   textarea.value = state.text;
 
   setupOcr(root, textarea);
-  setupNhk(root, textarea);
+  setupNhk(root);
 
   root.querySelector<HTMLButtonElement>("#example")!.addEventListener("click", () => {
     textarea.value = EXAMPLE;
@@ -117,37 +116,28 @@ function renderSource(root: HTMLElement) {
   void renderDictBar(root.querySelector<HTMLElement>("#dict-bar")!);
 }
 
-function setupNhk(root: HTMLElement, textarea: HTMLTextAreaElement) {
+function setupNhk(root: HTMLElement) {
   const btn = root.querySelector<HTMLButtonElement>("#nhk")!;
   const area = root.querySelector<HTMLElement>("#nhk-area")!;
 
-  btn.addEventListener("click", async () => {
-    area.innerHTML = `<p class="source__hint">Cargando noticias de NHK…</p>`;
-    try {
-      const list = await fetchNhkList();
-      const ul = document.createElement("ul");
-      ul.className = "source-list";
-      for (const article of list) {
-        const li = document.createElement("li");
-        li.className = "source-list__item";
-        li.textContent = article.title;
-        li.addEventListener("click", async () => {
-          area.innerHTML = `<p class="source__hint">Cargando artículo…</p>`;
-          try {
-            const text = await fetchNhkArticle(article.id);
-            textarea.value = text;
-            state.text = text;
-            area.innerHTML = `<p class="source__hint">Artículo cargado. Pulsa Analizar.</p>`;
-          } catch (err) {
-            area.innerHTML = `<p class="explain__error">${err instanceof Error ? err.message : "Error"}</p>`;
-          }
-        });
-        ul.appendChild(li);
-      }
-      area.replaceChildren(ul);
-    } catch (err) {
-      area.innerHTML = `<p class="explain__error">${err instanceof Error ? err.message : "Error al cargar NHK."}</p>`;
-    }
+  // NHK News Web Easy migró a un dominio nuevo (news.web.nhk) y su lista de
+  // noticias quedó tras autenticación (HTTP 401). Ya no es solo CORS: el dato
+  // está cerrado en el origen, así que ningún proxy lo resuelve. Se informa
+  // con honestidad en vez de lanzar peticiones que siempre fallan.
+  btn.addEventListener("click", () => {
+    area.innerHTML = `
+      <p class="source__hint">
+        NHK News Web Easy cambió su sitio y cerró el acceso público a su lista de
+        noticias, así que esta fuente no está disponible por ahora. Mientras tanto,
+        copia el texto de cualquier artículo y pégalo arriba para analizarlo.
+      </p>
+      <p class="source__hint">
+        Abrir NHK News Web Easy:
+        <a href="https://www3.nhk.or.jp/news/easy/" target="_blank" rel="noopener">
+          www3.nhk.or.jp/news/easy
+        </a>
+      </p>
+    `;
   });
 }
 
