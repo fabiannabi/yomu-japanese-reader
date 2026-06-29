@@ -3,8 +3,13 @@ import "../../styles/settings.css";
 import { analyzeText, type AnnotatedToken } from "../../services/reader.ts";
 import { getKnownSet } from "../../services/known-words.ts";
 import { getDeckWordSet } from "../../services/deck.ts";
-import { openWordSheet, buildWordDetail } from "../components/word-sheet.ts";
+import {
+  buildWordDetail,
+  buildPhraseDetail,
+  openSheet,
+} from "../components/word-sheet.ts";
 import { openChooser } from "../components/chooser-sheet.ts";
+import { hasJapanese } from "../../services/kana.ts";
 import { getDictStatus, loadFullDictionary } from "../../data/jmdict.ts";
 import { AOZORA_WORKS, fetchAozoraText } from "../../services/aozora.ts";
 
@@ -114,6 +119,8 @@ function renderShell(root: HTMLElement) {
   root.querySelector<HTMLButtonElement>("#change")!.addEventListener("click", () => {
     openChooser((text) => void analyzeAndShow(root, text));
   });
+
+  setupSelection(root);
 }
 
 function showBodyState(root: HTMLElement, message: string) {
@@ -221,6 +228,7 @@ function renderToken(t: AnnotatedToken, root: HTMLElement, sentence: string): No
   if (!t.isContent) {
     const span = document.createElement("span");
     span.className = "tok tok--plain";
+    span.dataset.surface = t.surface;
     span.textContent = t.surface;
     return span;
   }
@@ -231,6 +239,7 @@ function renderToken(t: AnnotatedToken, root: HTMLElement, sentence: string): No
   const span = document.createElement("span");
   span.className = `tok${isNew ? " tok--new" : ""}`;
   span.dataset.identity = identity;
+  span.dataset.surface = t.surface;
 
   if (t.needsFurigana) {
     const ruby = document.createElement("ruby");
@@ -269,12 +278,93 @@ function showWord(
     updateComprehension(root);
   };
 
-  // Escritorio: panel lateral. Móvil: hoja inferior.
+  showDetail(root, (onClose) => buildWordDetail(data, { onTracked }, onClose));
+}
+
+function showPhrase(root: HTMLElement, text: string) {
+  showDetail(root, (onClose) => buildPhraseDetail(text, onClose));
+}
+
+/** Muestra el detalle en el panel lateral (escritorio) o en una hoja (móvil). */
+function showDetail(
+  root: HTMLElement,
+  make: (onClose?: () => void) => HTMLElement
+) {
   if (window.matchMedia(WIDE).matches) {
     const aside = root.querySelector<HTMLElement>("#aside")!;
-    aside.replaceChildren(buildWordDetail(data, { onTracked }));
+    aside.replaceChildren(make());
   } else {
-    openWordSheet(data, { onTracked });
+    openSheet((close) => make(close));
+  }
+}
+
+// ---------- Selección de frase ----------
+let selBody: HTMLElement | null = null;
+let selPill: HTMLButtonElement | null = null;
+let selPhrase = "";
+let selWired = false;
+
+function setupSelection(root: HTMLElement) {
+  const body = root.querySelector<HTMLElement>("#body")!;
+  const pill = document.createElement("button");
+  pill.type = "button";
+  pill.className = "sel-pill";
+  pill.hidden = true;
+  pill.textContent = "Explicar selección";
+  // pointerdown dispara antes de que el tap borre la selección (móvil y escritorio).
+  pill.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (!selPhrase) return;
+    const text = selPhrase;
+    pill.hidden = true;
+    window.getSelection()?.removeAllRanges();
+    showPhrase(root, text);
+  });
+  root.appendChild(pill);
+
+  selBody = body;
+  selPill = pill;
+  selPhrase = "";
+
+  if (!selWired) {
+    selWired = true;
+    document.addEventListener("selectionchange", () =>
+      requestAnimationFrame(updateSelectionPill)
+    );
+  }
+}
+
+function updateSelectionPill() {
+  const body = selBody;
+  const pill = selPill;
+  if (!body || !pill || !document.contains(body)) {
+    if (pill) pill.hidden = true;
+    return;
+  }
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed || !sel.anchorNode || !body.contains(sel.anchorNode)) {
+    pill.hidden = true;
+    selPhrase = "";
+    return;
+  }
+  // Reconstruye el texto base de los tokens seleccionados (sin furigana).
+  const inSel = (n: Node) =>
+    (sel as Selection & { containsNode(node: Node, partial?: boolean): boolean }).containsNode(n, true);
+  const text = [...body.querySelectorAll<HTMLElement>(".tok")]
+    .filter((s) => inSel(s))
+    .map((s) => s.dataset.surface ?? s.textContent ?? "")
+    .join("")
+    .trim();
+
+  if (text.length > 1 && hasJapanese(text)) {
+    selPhrase = text;
+    const rect = sel.getRangeAt(0).getBoundingClientRect();
+    pill.style.top = `${Math.max(8, rect.top - 44)}px`;
+    pill.style.left = `${Math.min(rect.left, window.innerWidth - 170)}px`;
+    pill.hidden = false;
+  } else {
+    pill.hidden = true;
+    selPhrase = "";
   }
 }
 

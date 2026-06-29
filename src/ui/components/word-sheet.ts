@@ -6,26 +6,23 @@ import { analyzeGrammar, type GrammarSegment } from "../../services/grammar.ts";
 import { hasApiKey } from "../../services/settings.ts";
 
 export interface WordSheetData {
-  /** Identidad para mazo/conocidas (forma de diccionario o superficie). */
   identity: string;
   word: string;
   reading: string;
   meaning?: string;
   pos?: string;
-  /** Oración que contiene la palabra (para “explicar gramática”). */
   sentence?: string;
 }
 
 interface WordSheetOptions {
-  /** Se llama cuando la palabra pasa a estar "rastreada" (añadida al mazo). */
   onTracked?: (identity: string) => void;
 }
 
 /**
- * Construye el contenido del detalle de una palabra (escritura, lectura, POS,
- * significado, [al mazo], [explicar]). Se usa tanto en la hoja inferior (móvil)
- * como en el panel lateral del lector (escritorio). `onClose` se invoca al
- * navegar a Ajustes desde "explicar" (la hoja la usa para cerrarse).
+ * Detalle de una palabra: escritura, lectura, significado, [al mazo] y el
+ * desglose gramatical de su oración (SIEMPRE visible, sin botón). Si hay API
+ * key, ofrece además una explicación con IA. Se usa en la hoja inferior (móvil)
+ * y en el panel lateral (escritorio).
  */
 export function buildWordDetail(
   data: WordSheetData,
@@ -45,74 +42,48 @@ export function buildWordDetail(
     </p>
     <div class="sheet__actions">
       <button class="btn btn--primary" data-action="deck"></button>
-      <button class="btn" data-action="explain">Explicar</button>
     </div>
-    <div class="explain" id="explain" hidden></div>
+    <div class="explain" id="explain"></div>
   `;
 
-  const deckBtn = el.querySelector<HTMLButtonElement>('[data-action="deck"]')!;
-  function refreshDeckBtn(s: { known: boolean; inDeck: boolean }) {
-    if (s.known) {
-      deckBtn.textContent = "Ya la dominas";
-      deckBtn.disabled = true;
-      deckBtn.classList.remove("btn--primary");
-      deckBtn.classList.add("btn--known");
-    } else if (s.inDeck) {
-      deckBtn.textContent = "En el mazo";
-      deckBtn.disabled = true;
-      deckBtn.classList.remove("btn--primary");
-      deckBtn.classList.add("btn--known");
-    } else {
-      deckBtn.textContent = "Al mazo";
-      deckBtn.disabled = false;
-    }
-  }
-  refreshDeckBtn({ known: false, inDeck: false });
-  // Estado real (conocida / en el mazo) de forma asíncrona.
-  void Promise.all([isKnown(data.identity), isInDeck(data.identity)]).then(
-    ([known, inDeck]) => refreshDeckBtn({ known, inDeck })
-  );
+  wireDeck(el, data, options);
 
-  deckBtn.addEventListener("click", async () => {
-    deckBtn.disabled = true;
-    const added = await addToDeck(data.identity, data.reading, data.meaning ?? "");
-    refreshDeckBtn({ known: false, inDeck: true });
-    if (added) options.onTracked?.(data.identity);
-  });
-
-  const explainBtn = el.querySelector<HTMLButtonElement>('[data-action="explain"]')!;
-  const explainBox = el.querySelector<HTMLElement>("#explain")!;
-  explainBtn.addEventListener("click", async () => {
-    const sentence = data.sentence?.trim() || data.word;
-    explainBox.hidden = false;
-    explainBox.innerHTML = `<p class="explain__loading">Analizando…</p>`;
-    explainBtn.disabled = true;
-    try {
-      const segments = await analyzeGrammar(sentence);
-      renderGrammar(explainBox, segments);
-      await offerAi(explainBox, sentence, onClose);
-    } catch {
-      explainBox.innerHTML = `<p class="explain__error">No se pudo analizar la gramática.</p>`;
-    } finally {
-      explainBtn.disabled = false;
-    }
-  });
+  const box = el.querySelector<HTMLElement>("#explain")!;
+  void renderGrammarFor(box, data.sentence?.trim() || data.word, onClose);
 
   return el;
 }
 
-/** Abre la hoja inferior de detalle de una palabra (móvil). */
-export function openWordSheet(
-  data: WordSheetData,
-  options: WordSheetOptions = {}
-): void {
+/**
+ * Detalle de una FRASE seleccionada: muestra el desglose gramatical de todo el
+ * texto seleccionado (con significado por palabra) y, si hay key, opción de IA.
+ */
+export function buildPhraseDetail(
+  text: string,
+  onClose?: () => void
+): HTMLElement {
+  const el = document.createElement("div");
+  el.className = "word-detail";
+  el.innerHTML = `
+    <p class="sheet__reading">Frase seleccionada</p>
+    <h2 class="sheet__word phrase-detail__text" lang="ja"></h2>
+    <div class="explain" id="explain"></div>
+  `;
+  el.querySelector<HTMLElement>(".phrase-detail__text")!.textContent =
+    text.length > 80 ? `${text.slice(0, 80)}…` : text;
+
+  const box = el.querySelector<HTMLElement>("#explain")!;
+  void renderGrammarFor(box, text, onClose);
+  return el;
+}
+
+/** Abre cualquier contenido de detalle como hoja inferior (móvil). */
+export function openSheet(build: (close: () => void) => HTMLElement): void {
   const overlay = document.createElement("div");
   overlay.className = "sheet-overlay";
-
   const sheet = document.createElement("div");
   sheet.className = "sheet";
   sheet.setAttribute("role", "dialog");
-  sheet.setAttribute("aria-label", `Detalle de ${data.word}`);
 
   function close() {
     overlay.removeEventListener("keydown", onKey);
@@ -128,18 +99,76 @@ export function openWordSheet(
   grip.addEventListener("click", close);
 
   sheet.appendChild(grip);
-  sheet.appendChild(buildWordDetail(data, options, close));
+  sheet.appendChild(build(close));
 
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) close();
   });
   overlay.addEventListener("keydown", onKey);
-
   overlay.appendChild(sheet);
   document.body.appendChild(overlay);
 }
 
-/** Pinta el desglose gramatical local (sin API). */
+/** Atajo: abre el detalle de una palabra como hoja (móvil). */
+export function openWordSheet(
+  data: WordSheetData,
+  options: WordSheetOptions = {}
+): void {
+  openSheet((close) => buildWordDetail(data, options, close));
+}
+
+// ---------- Internos ----------
+
+function wireDeck(
+  el: HTMLElement,
+  data: WordSheetData,
+  options: WordSheetOptions
+) {
+  const deckBtn = el.querySelector<HTMLButtonElement>('[data-action="deck"]')!;
+  function refresh(s: { known: boolean; inDeck: boolean }) {
+    if (s.known) {
+      deckBtn.textContent = "Ya la dominas";
+      deckBtn.disabled = true;
+      deckBtn.classList.remove("btn--primary");
+      deckBtn.classList.add("btn--known");
+    } else if (s.inDeck) {
+      deckBtn.textContent = "En el mazo";
+      deckBtn.disabled = true;
+      deckBtn.classList.remove("btn--primary");
+      deckBtn.classList.add("btn--known");
+    } else {
+      deckBtn.textContent = "Al mazo";
+      deckBtn.disabled = false;
+    }
+  }
+  refresh({ known: false, inDeck: false });
+  void Promise.all([isKnown(data.identity), isInDeck(data.identity)]).then(
+    ([known, inDeck]) => refresh({ known, inDeck })
+  );
+
+  deckBtn.addEventListener("click", async () => {
+    deckBtn.disabled = true;
+    const added = await addToDeck(data.identity, data.reading, data.meaning ?? "");
+    refresh({ known: false, inDeck: true });
+    if (added) options.onTracked?.(data.identity);
+  });
+}
+
+async function renderGrammarFor(
+  box: HTMLElement,
+  sentence: string,
+  onClose?: () => void
+) {
+  box.innerHTML = `<p class="explain__loading">Analizando gramática…</p>`;
+  try {
+    const segments = await analyzeGrammar(sentence);
+    renderGrammar(box, segments);
+    await offerAi(box, sentence, onClose);
+  } catch {
+    box.innerHTML = `<p class="explain__error">No se pudo analizar la gramática.</p>`;
+  }
+}
+
 function renderGrammar(box: HTMLElement, segments: GrammarSegment[]) {
   box.innerHTML = `<p class="explain__title">Gramática</p>`;
   if (segments.length === 0) {
@@ -182,7 +211,6 @@ function renderGrammar(box: HTMLElement, segments: GrammarSegment[]) {
   box.appendChild(ul);
 }
 
-/** Ofrece una explicación con IA solo como extra opcional (si hay API key). */
 async function offerAi(
   box: HTMLElement,
   sentence: string,
@@ -217,7 +245,8 @@ async function offerAi(
   } else {
     const note = document.createElement("p");
     note.className = "explain__hint";
-    note.textContent = "¿Quieres una explicación más detallada con IA? Añade tu API key en ";
+    note.textContent =
+      "¿Quieres una explicación más detallada con IA? Añade tu API key en ";
     const link = document.createElement("button");
     link.className = "link-btn";
     link.textContent = "Ajustes";
