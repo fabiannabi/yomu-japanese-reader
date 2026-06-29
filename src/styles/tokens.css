@@ -12,6 +12,7 @@
   --vermilion-tint: rgba(200, 72, 46, 0.12);
   --line: #e3ddd0;
   --surface: #ffffff;
+  --scrim: rgba(26, 28, 34, 0.4); /* velo tras la hoja inferior */
 
   /* Tipografía */
   --font-ui:
@@ -46,6 +47,7 @@
     --vermilion-tint: rgba(226, 102, 76, 0.16);
     --line: #2a2c33;
     --surface: #1d1f25;
+    --scrim: rgba(0, 0, 0, 0.55);
     --shadow-sheet: 0 -8px 32px rgba(0, 0, 0, 0.5);
     --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3);
   }

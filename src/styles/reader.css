@@ -1,0 +1,200 @@
+/* Lector, selector de fuente y hoja de detalle de palabra */
+
+.source__label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+
+.source__textarea {
+  width: 100%;
+  min-height: 160px;
+  resize: vertical;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-jp);
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+
+.source__actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.source__hint {
+  margin-top: var(--space-4);
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+/* Barra de estado del diccionario */
+.dict-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  margin-bottom: var(--space-4);
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+.dict-bar__progress {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+.dict-bar__progress > span {
+  display: block;
+  height: 100%;
+  background: var(--indigo);
+  width: 0;
+  transition: width 0.2s ease;
+}
+
+/* Vista de lectura */
+.reader__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+  gap: var(--space-3);
+}
+.reader__comprehension {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+.reader__comprehension strong {
+  color: var(--indigo);
+}
+
+.reader__body {
+  font-family: var(--font-jp);
+  font-size: 1.4rem;
+  line-height: 2.4;
+}
+.reader__line {
+  margin: 0 0 var(--space-3);
+}
+
+/* Token: palabra de contenido tocable */
+.tok {
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 0 1px;
+  transition: background 0.12s ease;
+}
+.tok:hover {
+  background: var(--indigo-tint);
+}
+/* Palabra nueva (no conocida) resaltada con fondo índigo tenue */
+.tok--new {
+  background: var(--indigo-tint);
+}
+.tok--new:hover {
+  background: var(--indigo-tint-strong);
+}
+/* Texto plano no tocable (partículas, signos) */
+.tok--plain {
+  cursor: default;
+}
+
+ruby rt {
+  font-size: 0.5em;
+  color: var(--ink-soft);
+  font-weight: 400;
+}
+
+/* Hoja inferior de detalle */
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+  animation: fade-in 0.15s ease;
+}
+.sheet {
+  width: 100%;
+  max-width: 560px;
+  background: var(--surface);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: var(--shadow-sheet);
+  padding: var(--space-5) var(--space-4)
+    calc(var(--space-5) + env(safe-area-inset-bottom, 0px));
+  animation: slide-up 0.2s ease;
+}
+.sheet__grip {
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line);
+  margin: 0 auto var(--space-4);
+}
+.sheet__word {
+  font-family: var(--font-jp);
+  font-size: 2rem;
+  font-weight: 600;
+  margin: 0;
+}
+.sheet__reading {
+  font-family: var(--font-jp);
+  color: var(--ink-soft);
+  margin: var(--space-1) 0 var(--space-3);
+  font-size: 1.1rem;
+}
+.sheet__pos {
+  display: inline-block;
+  font-size: 0.75rem;
+  color: var(--indigo);
+  background: var(--indigo-tint);
+  border-radius: 999px;
+  padding: 2px 10px;
+  margin-bottom: var(--space-3);
+}
+.sheet__meaning {
+  font-size: 1.05rem;
+  margin: 0 0 var(--space-5);
+}
+.sheet__meaning--empty {
+  color: var(--ink-soft);
+  font-style: italic;
+}
+.sheet__actions {
+  display: flex;
+  gap: var(--space-3);
+}
+.sheet__actions .btn {
+  flex: 1;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn--known {
+  border-color: var(--indigo);
+  color: var(--indigo);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+  }
+}

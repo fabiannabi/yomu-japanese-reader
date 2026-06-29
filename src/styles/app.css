@@ -121,11 +121,5 @@ body {
 .btn--primary {
   background: var(--indigo);
   border-color: var(--indigo);
-  color: #fff;
-}
-
-@media (prefers-color-scheme: dark) {
-  .btn--primary {
-    color: #15161a;
-  }
+  color: var(--paper);
 }
