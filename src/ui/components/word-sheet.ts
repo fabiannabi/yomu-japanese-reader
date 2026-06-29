@@ -1,7 +1,9 @@
 import "../../styles/settings.css";
 import { addToDeck, isInDeck } from "../../services/deck.ts";
 import { isKnown } from "../../services/known-words.ts";
-import { explainGrammar, MissingApiKeyError } from "../../services/llm.ts";
+import { explainGrammar } from "../../services/llm.ts";
+import { analyzeGrammar, type GrammarSegment } from "../../services/grammar.ts";
+import { hasApiKey } from "../../services/settings.ts";
 
 export interface WordSheetData {
   /** Identidad para mazo/conocidas (forma de diccionario o superficie). */
@@ -83,32 +85,14 @@ export function buildWordDetail(
   explainBtn.addEventListener("click", async () => {
     const sentence = data.sentence?.trim() || data.word;
     explainBox.hidden = false;
-    explainBox.innerHTML = `<p class="explain__loading">Pensando…</p>`;
+    explainBox.innerHTML = `<p class="explain__loading">Analizando…</p>`;
     explainBtn.disabled = true;
     try {
-      const text = await explainGrammar(sentence);
-      explainBox.innerHTML = `
-        <p class="explain__title">Gramática</p>
-        <div class="explain__body"></div>
-      `;
-      explainBox.querySelector<HTMLElement>(".explain__body")!.textContent = text;
-    } catch (err) {
-      if (err instanceof MissingApiKeyError) {
-        explainBox.innerHTML = `<p class="explain__error">Añade tu API key en Ajustes para usar “explicar”.</p>`;
-        const link = document.createElement("button");
-        link.className = "btn";
-        link.textContent = "Ir a Ajustes";
-        link.style.marginTop = "var(--space-2)";
-        link.addEventListener("click", () => {
-          onClose?.();
-          location.hash = "#/ajustes";
-        });
-        explainBox.appendChild(link);
-      } else {
-        explainBox.innerHTML = `<p class="explain__error">${escapeHtml(
-          err instanceof Error ? err.message : "Error al explicar."
-        )}</p>`;
-      }
+      const segments = await analyzeGrammar(sentence);
+      renderGrammar(explainBox, segments);
+      await offerAi(explainBox, sentence, onClose);
+    } catch {
+      explainBox.innerHTML = `<p class="explain__error">No se pudo analizar la gramática.</p>`;
     } finally {
       explainBtn.disabled = false;
     }
@@ -153,6 +137,86 @@ export function openWordSheet(
 
   overlay.appendChild(sheet);
   document.body.appendChild(overlay);
+}
+
+/** Pinta el desglose gramatical local (sin API). */
+function renderGrammar(box: HTMLElement, segments: GrammarSegment[]) {
+  box.innerHTML = `<p class="explain__title">Gramática</p>`;
+  if (segments.length === 0) {
+    const p = document.createElement("p");
+    p.className = "explain__hint";
+    p.textContent = "No hay nada que desglosar.";
+    box.appendChild(p);
+    return;
+  }
+  const ul = document.createElement("ul");
+  ul.className = "grammar";
+  for (const seg of segments) {
+    const li = document.createElement("li");
+    li.className = "grammar__item";
+    const w = document.createElement("span");
+    w.className = "grammar__w";
+    w.lang = "ja";
+    w.textContent =
+      seg.reading && seg.reading !== seg.surface
+        ? `${seg.surface}（${seg.reading}）`
+        : seg.surface;
+    const r = document.createElement("span");
+    r.className = "grammar__role";
+    r.textContent = seg.role;
+    li.append(w, r);
+    ul.appendChild(li);
+  }
+  box.appendChild(ul);
+}
+
+/** Ofrece una explicación con IA solo como extra opcional (si hay API key). */
+async function offerAi(
+  box: HTMLElement,
+  sentence: string,
+  onClose?: () => void
+) {
+  if (await hasApiKey()) {
+    const btn = document.createElement("button");
+    btn.className = "btn";
+    btn.style.marginTop = "var(--space-3)";
+    btn.textContent = "Explicación con IA";
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      btn.textContent = "Pensando…";
+      try {
+        const text = await explainGrammar(sentence);
+        const body = document.createElement("div");
+        body.className = "explain__body";
+        body.style.marginTop = "var(--space-3)";
+        body.textContent = text;
+        box.appendChild(body);
+        btn.remove();
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = "Explicación con IA";
+        const e = document.createElement("p");
+        e.className = "explain__error";
+        e.textContent = err instanceof Error ? err.message : "Error al explicar.";
+        box.appendChild(e);
+      }
+    });
+    box.appendChild(btn);
+  } else {
+    const note = document.createElement("p");
+    note.className = "explain__hint";
+    note.textContent = "¿Quieres una explicación más detallada con IA? Añade tu API key en ";
+    const link = document.createElement("button");
+    link.className = "link-btn";
+    link.textContent = "Ajustes";
+    link.addEventListener("click", () => {
+      onClose?.();
+      location.hash = "#/ajustes";
+    });
+    note.appendChild(link);
+    note.appendChild(document.createTextNode("."));
+    box.appendChild(note);
+  }
 }
 
 function escapeHtml(s: string): string {

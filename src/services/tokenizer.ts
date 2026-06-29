@@ -65,3 +65,10 @@ export async function tokenize(text: string): Promise<YomuToken[]> {
   const tokenizer = await initTokenizer();
   return tokenizer.tokenize(text).map(toYomuToken);
 }
+
+/** Tokeniza devolviendo las características crudas de IPADIC (para análisis gramatical). */
+export async function tokenizeRaw(text: string): Promise<IpadicFeatures[]> {
+  if (!text.trim()) return [];
+  const tokenizer = await initTokenizer();
+  return tokenizer.tokenize(text);
+}
