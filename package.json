@@ -12,12 +12,13 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "build:seed": "node scripts/build-seed.mjs",
-    "selftest": "node --experimental-strip-types scripts/selftest.ts"
+    "selftest": "node --experimental-strip-types scripts/selftest.ts && node --experimental-strip-types scripts/selftest-srs.ts"
   },
   "dependencies": {
     "@aiktb/kuromoji": "^1.0.2",
     "dexie": "^4.0.10",
-    "fflate": "^0.8.3"
+    "fflate": "^0.8.3",
+    "ts-fsrs": "^5.4.1"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

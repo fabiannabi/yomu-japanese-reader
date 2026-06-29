@@ -19,16 +19,33 @@ interface ReaderState {
   mode: "source" | "reading";
   text: string;
   lines: AnnotatedToken[][];
-  tracked: Set<string>; // conocidas ∪ en el mazo
+  tracked: Set<string>; // conocidas ∪ en el mazo (para el resaltado)
+  known: Set<string>; // solo dominadas (para la comprensión)
 }
 const state: ReaderState = {
   mode: "source",
   text: "日本語を勉強する。\n今日はとてもいい天気です。",
   lines: [],
   tracked: new Set(),
+  known: new Set(),
 };
 
 const EXAMPLE = "日本語を勉強する。\n今日はとてもいい天気です。";
+
+/** Estadísticas del último texto analizado (para la pantalla de Progreso). */
+export function getReadingStats(): { total: number; known: number } | null {
+  if (state.lines.length === 0) return null;
+  let total = 0;
+  let known = 0;
+  for (const line of state.lines) {
+    for (const t of line) {
+      if (!t.isContent) continue;
+      total++;
+      if (state.known.has(identityOf(t))) known++;
+    }
+  }
+  return total === 0 ? null : { total, known };
+}
 
 export function ReadScreen(): HTMLElement {
   const root = document.createElement("section");
@@ -123,6 +140,7 @@ async function renderDictBar(bar: HTMLElement) {
 // ---------- Análisis ----------
 async function analyzeIntoState(text: string) {
   const [knownSet, deckSet] = await Promise.all([getKnownSet(), getDeckWordSet()]);
+  state.known = knownSet;
   state.tracked = new Set([...knownSet, ...deckSet]);
 
   // Tokeniza línea por línea para conservar los saltos de párrafo.
@@ -226,7 +244,7 @@ function updateComprehension(root: HTMLElement) {
     for (const t of line) {
       if (!t.isContent) continue;
       total++;
-      if (state.tracked.has(identityOf(t))) known++;
+      if (state.known.has(identityOf(t))) known++;
     }
   }
   const el = root.querySelector<HTMLElement>("#comprehension");

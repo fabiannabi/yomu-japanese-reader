@@ -15,13 +15,17 @@ export interface DeckCard {
   word: string;
   reading: string;
   meaning: string;
-  // Campos FSRS (se rellenan en la Fase 3 con ts-fsrs)
-  due: number;
+  // Campos FSRS (ts-fsrs). Las fechas se guardan como ms epoch.
+  due: number; // indexado, para "por repasar"
   stability: number;
   difficulty: number;
+  elapsedDays: number;
+  scheduledDays: number;
   reps: number;
   lapses: number;
-  state: number;
+  learningSteps: number;
+  state: number; // 0 New, 1 Learning, 2 Review, 3 Relearning
+  lastReview?: number;
 }
 
 export interface DictEntry {

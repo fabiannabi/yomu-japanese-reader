@@ -1,0 +1,140 @@
+/* Repaso (SRS) y Progreso */
+
+.review {
+  display: flex;
+  flex-direction: column;
+  min-height: 60vh;
+}
+.review__count {
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  margin-bottom: var(--space-5);
+}
+.review__count strong {
+  color: var(--vermilion); /* "por repasar" en bermellón (§9) */
+}
+
+.review__card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+.review__word {
+  font-family: var(--font-jp);
+  font-size: 3rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.review__reading {
+  font-family: var(--font-jp);
+  font-size: 1.3rem;
+  color: var(--ink-soft);
+}
+.review__meaning {
+  font-size: 1.15rem;
+  max-width: 36ch;
+}
+.review__pos {
+  font-size: 0.75rem;
+  color: var(--indigo);
+  background: var(--indigo-tint);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+.review__actions {
+  margin-top: var(--space-5);
+  display: flex;
+  gap: var(--space-3);
+}
+.review__actions .btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+}
+.review__interval {
+  font-size: 0.72rem;
+  opacity: 0.8;
+}
+.btn--again {
+  border-color: var(--vermilion);
+  color: var(--vermilion);
+}
+
+.review__empty,
+.review__done {
+  text-align: center;
+  padding: var(--space-6) var(--space-4);
+  color: var(--ink-soft);
+}
+.review__done-num {
+  font-size: 2.5rem;
+  font-weight: 600;
+  color: var(--indigo);
+}
+
+/* Progreso */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+.stat {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: var(--space-4) var(--space-3);
+  text-align: center;
+}
+.stat__num {
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+.stat__num--due {
+  color: var(--vermilion);
+}
+.stat__label {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.comprehension-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: var(--space-4);
+}
+.comprehension-card__title {
+  font-weight: 600;
+  margin: 0 0 var(--space-3);
+}
+.comprehension-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+  margin-bottom: var(--space-2);
+}
+.comprehension-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--indigo);
+}
+.comprehension-card__pct {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--indigo);
+}
