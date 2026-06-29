@@ -8,6 +8,7 @@ import {
   type LoadProgress,
 } from "../../data/jmdict.ts";
 import { openWordSheet } from "../components/word-sheet.ts";
+import { recognizeImage, type OcrProgress } from "../../services/ocr.ts";
 
 /** Identidad de un token para el modelo del estudiante (forma de diccionario o superficie). */
 function identityOf(t: AnnotatedToken): string {
@@ -63,19 +64,27 @@ function render(root: HTMLElement) {
 function renderSource(root: HTMLElement) {
   root.innerHTML = `
     <h1 class="screen__title">Leer</h1>
-    <p class="screen__subtitle">Pega texto japonés para analizarlo. (Cámara en la Fase 4.)</p>
+    <p class="screen__subtitle">Pega texto japonés o usa una foto para analizarlo.</p>
     <div class="dict-bar" id="dict-bar"></div>
     <label class="source__label" for="src">Texto japonés</label>
     <textarea id="src" class="source__textarea" lang="ja" placeholder="ここに日本語を貼り付け…"></textarea>
     <div class="source__actions">
       <button class="btn btn--primary" id="analyze">Analizar</button>
+      <button class="btn" id="photo">Foto / cámara</button>
       <button class="btn" id="example">Usar ejemplo</button>
+    </div>
+    <input type="file" id="photo-input" accept="image/*" capture="environment" hidden />
+    <div class="ocr-status" id="ocr-status" hidden>
+      <span id="ocr-label"></span>
+      <div class="dict-bar__progress"><span id="ocr-prog"></span></div>
     </div>
     <p class="source__hint">Las palabras nuevas se resaltan; las que ya dominas quedan en texto plano.</p>
   `;
 
   const textarea = root.querySelector<HTMLTextAreaElement>("#src")!;
   textarea.value = state.text;
+
+  setupOcr(root, textarea);
 
   root.querySelector<HTMLButtonElement>("#example")!.addEventListener("click", () => {
     textarea.value = EXAMPLE;
@@ -101,6 +110,46 @@ function renderSource(root: HTMLElement) {
   });
 
   void renderDictBar(root.querySelector<HTMLElement>("#dict-bar")!);
+}
+
+function setupOcr(root: HTMLElement, textarea: HTMLTextAreaElement) {
+  const photoBtn = root.querySelector<HTMLButtonElement>("#photo")!;
+  const input = root.querySelector<HTMLInputElement>("#photo-input")!;
+  const statusEl = root.querySelector<HTMLElement>("#ocr-status")!;
+  const labelEl = root.querySelector<HTMLElement>("#ocr-label")!;
+  const progEl = root.querySelector<HTMLElement>("#ocr-prog")!;
+
+  photoBtn.addEventListener("click", () => input.click());
+
+  input.addEventListener("change", async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    statusEl.hidden = false;
+    photoBtn.disabled = true;
+    labelEl.textContent = "Preparando…";
+    progEl.style.width = "0%";
+
+    const onProgress = (p: OcrProgress) => {
+      labelEl.textContent = p.message;
+      progEl.style.width = `${Math.round(p.ratio * 100)}%`;
+    };
+    try {
+      const text = await recognizeImage(file, onProgress);
+      if (text) {
+        textarea.value = text;
+        state.text = text;
+        labelEl.textContent = "Texto detectado. Revísalo y pulsa Analizar.";
+      } else {
+        labelEl.textContent = "No se detectó texto. Prueba con una foto más nítida.";
+      }
+    } catch (err) {
+      console.error(err);
+      labelEl.textContent = "Error en el OCR. Reintenta.";
+    } finally {
+      photoBtn.disabled = false;
+      input.value = ""; // permitir re-subir la misma imagen
+    }
+  });
 }
 
 async function renderDictBar(bar: HTMLElement) {
