@@ -4,13 +4,20 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "postinstall": "node scripts/copy-dict.mjs",
+    "predev": "node scripts/copy-dict.mjs",
+    "prebuild": "node scripts/copy-dict.mjs",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:seed": "node scripts/build-seed.mjs",
+    "selftest": "node --experimental-strip-types scripts/selftest.ts"
   },
   "dependencies": {
-    "dexie": "^4.0.10"
+    "@aiktb/kuromoji": "^1.0.2",
+    "dexie": "^4.0.10",
+    "fflate": "^0.8.3"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

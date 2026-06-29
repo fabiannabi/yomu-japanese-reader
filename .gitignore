@@ -1,6 +1,9 @@
 node_modules
 dist
 dist-ssr
+
+# Diccionario kuromoji (reproducible desde node_modules vía scripts/copy-dict.mjs)
+public/dict
 .env
 .env.*
 *.local

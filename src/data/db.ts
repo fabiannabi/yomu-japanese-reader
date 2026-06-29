@@ -27,9 +27,11 @@ export interface DeckCard {
 export interface DictEntry {
   id?: number;
   key: string; // escritura o lectura, normalizada para lookup
-  word: string;
-  reading: string;
-  meaning: string;
+  word: string; // forma principal a mostrar (kanji si existe, si no kana)
+  reading: string; // lectura principal en kana
+  meaning: string; // glosas unidas (p. ej. "language; word; phrase")
+  pos?: string; // categoría(s) gramatical(es), legibles
+  common?: boolean; // si la entrada está marcada como común en JMdict
 }
 
 export interface Settings {
@@ -39,11 +41,18 @@ export interface Settings {
   sources?: string[];
 }
 
+/** Bookkeeping interno clave-valor (estado de carga del diccionario, versiones, etc.). */
+export interface Meta {
+  key: string;
+  value: unknown;
+}
+
 export class YomuDB extends Dexie {
   knownWords!: Table<KnownWord, string>;
   deck!: Table<DeckCard, number>;
   dict!: Table<DictEntry, number>;
   settings!: Table<Settings, string>;
+  meta!: Table<Meta, string>;
 
   constructor() {
     super("yomu");
@@ -52,6 +61,10 @@ export class YomuDB extends Dexie {
       deck: "++id, word, due, state",
       dict: "++id, key, word",
       settings: "id",
+    });
+    // v2: store de bookkeeping para el estado del diccionario (Fase 1).
+    this.version(2).stores({
+      meta: "key",
     });
   }
 }
