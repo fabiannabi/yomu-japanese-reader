@@ -35,11 +35,13 @@ export interface JMWord {
 }
 interface JMFile {
   words: JMWord[];
+  version?: string;
   tags?: Record<string, string>;
 }
 
-const GH_LATEST =
-  "https://api.github.com/repos/scriptin/jmdict-simplified/releases/latest";
+// El diccionario completo se sirve desde el propio sitio (mismo origen, sin CORS).
+// Los release assets de GitHub no envían cabeceras CORS, así que se vendoriza aquí.
+const FULL_DICT_FILE = "jmdict-eng-common.json.zip";
 
 const META_STATUS = "dictStatus";
 
@@ -206,24 +208,6 @@ export async function ensureSeedDictionary(): Promise<DictStatus> {
 
 // ---- Carga del diccionario completo (a demanda, con progreso) ----
 
-async function resolveLatestZipUrl(): Promise<{ url: string; version: string }> {
-  const res = await fetch(GH_LATEST, {
-    headers: { Accept: "application/vnd.github+json" },
-  });
-  if (!res.ok) {
-    throw new Error(`No se pudo consultar el último release: ${res.statusText}`);
-  }
-  const data = (await res.json()) as {
-    tag_name: string;
-    assets: { name: string; browser_download_url: string }[];
-  };
-  const asset = data.assets.find(
-    (a) => a.name.startsWith("jmdict-eng-common") && a.name.endsWith(".json.zip")
-  );
-  if (!asset) throw new Error("No se encontró el asset jmdict-eng-common .zip");
-  return { url: asset.browser_download_url, version: data.tag_name };
-}
-
 async function fetchWithProgress(
   url: string,
   onProgress?: ProgressFn
@@ -267,12 +251,10 @@ async function fetchWithProgress(
 export async function loadFullDictionary(
   onProgress?: ProgressFn
 ): Promise<DictStatus> {
-  onProgress?.({
-    phase: "resolviendo",
-    message: "Buscando la última versión del diccionario…",
-  });
-  const { url, version } = await resolveLatestZipUrl();
-
+  const url = `${import.meta.env.BASE_URL}${FULL_DICT_FILE}`.replace(
+    /\/{2,}/g,
+    "/"
+  );
   const zipBytes = await fetchWithProgress(url, onProgress);
 
   onProgress?.({ phase: "descomprimiendo", message: "Descomprimiendo…" });
@@ -280,6 +262,7 @@ export async function loadFullDictionary(
   const jsonName = Object.keys(files).find((n) => n.endsWith(".json"));
   if (!jsonName) throw new Error("El zip no contiene un .json");
   const file = parseJmdict(strFromU8(files[jsonName]));
+  const version = file.version;
 
   onProgress?.({
     phase: "indexando",

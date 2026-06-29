@@ -8,6 +8,11 @@ const LIST_URL = "https://www3.nhk.or.jp/news/easy/news-list.json";
 const articleUrl = (id: string) =>
   `https://www3.nhk.or.jp/news/easy/${id}/${id}.html`;
 
+// NHK no envía cabeceras CORS, así que pasamos por un proxy público que sí las añade.
+// Es un servicio externo de terceros; por eso la fuente sigue siendo experimental.
+const proxied = (url: string) =>
+  `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+
 export interface NhkArticle {
   id: string;
   title: string;
@@ -26,7 +31,7 @@ export class NhkBlockedError extends Error {
 export async function fetchNhkList(): Promise<NhkArticle[]> {
   let res: Response;
   try {
-    res = await fetch(LIST_URL);
+    res = await fetch(proxied(LIST_URL));
   } catch {
     throw new NhkBlockedError();
   }
@@ -53,7 +58,7 @@ interface NhkRawArticle {
 export async function fetchNhkArticle(id: string): Promise<string> {
   let res: Response;
   try {
-    res = await fetch(articleUrl(id));
+    res = await fetch(proxied(articleUrl(id)));
   } catch {
     throw new NhkBlockedError();
   }
