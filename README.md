@@ -8,6 +8,7 @@ salvo "explicar gramática" (API de Claude, opcional).
 ## Funciones
 
 - **Lector**: pega texto u OCR de una foto → tokenización con furigana, palabras nuevas resaltadas.
+- **Fuentes**: texto real de Wikipedia y noticias de Wikinews en japonés (API pública con CORS).
 - **Diccionario** offline (JMdict-simplified) al tocar cualquier palabra.
 - **Repaso espaciado** (FSRS) y **progreso** con % de comprensión.
 - **Cámara / OCR** de japonés (Tesseract.js).

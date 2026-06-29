@@ -10,6 +10,14 @@ import {
 } from "../../data/jmdict.ts";
 import { openWordSheet } from "../components/word-sheet.ts";
 import { recognizeImage, type OcrProgress } from "../../services/ocr.ts";
+import {
+  randomPages,
+  searchPages,
+  recentPages,
+  fetchExtract,
+  type WikiHost,
+  type WikiPage,
+} from "../../services/wiki.ts";
 
 /** Identidad de un token para el modelo del estudiante (forma de diccionario o superficie). */
 function identityOf(t: AnnotatedToken): string {
@@ -72,7 +80,8 @@ function renderSource(root: HTMLElement) {
     <div class="source__actions">
       <button class="btn btn--primary" id="analyze">Analizar</button>
       <button class="btn" id="photo">Foto / cámara</button>
-      <button class="btn" id="nhk">NHK</button>
+      <button class="btn" id="src-wiki">Wikipedia</button>
+      <button class="btn" id="src-news">Noticias</button>
       <button class="btn" id="example">Usar ejemplo</button>
     </div>
     <input type="file" id="photo-input" accept="image/*" capture="environment" hidden />
@@ -80,7 +89,7 @@ function renderSource(root: HTMLElement) {
       <span id="ocr-label"></span>
       <div class="dict-bar__progress"><span id="ocr-prog"></span></div>
     </div>
-    <div id="nhk-area"></div>
+    <div id="source-area"></div>
     <p class="source__hint">Las palabras nuevas se resaltan; las que ya dominas quedan en texto plano.</p>
   `;
 
@@ -88,7 +97,7 @@ function renderSource(root: HTMLElement) {
   textarea.value = state.text;
 
   setupOcr(root, textarea);
-  setupNhk(root);
+  setupSources(root, textarea);
 
   root.querySelector<HTMLButtonElement>("#example")!.addEventListener("click", () => {
     textarea.value = EXAMPLE;
@@ -116,29 +125,112 @@ function renderSource(root: HTMLElement) {
   void renderDictBar(root.querySelector<HTMLElement>("#dict-bar")!);
 }
 
-function setupNhk(root: HTMLElement) {
-  const btn = root.querySelector<HTMLButtonElement>("#nhk")!;
-  const area = root.querySelector<HTMLElement>("#nhk-area")!;
+function setupSources(root: HTMLElement, textarea: HTMLTextAreaElement) {
+  const area = root.querySelector<HTMLElement>("#source-area")!;
 
-  // NHK News Web Easy migró a un dominio nuevo (news.web.nhk) y su lista de
-  // noticias quedó tras autenticación (HTTP 401). Ya no es solo CORS: el dato
-  // está cerrado en el origen, así que ningún proxy lo resuelve. Se informa
-  // con honestidad en vez de lanzar peticiones que siempre fallan.
-  btn.addEventListener("click", () => {
-    area.innerHTML = `
-      <p class="source__hint">
-        NHK News Web Easy cambió su sitio y cerró el acceso público a su lista de
-        noticias, así que esta fuente no está disponible por ahora. Mientras tanto,
-        copia el texto de cualquier artículo y pégalo arriba para analizarlo.
-      </p>
-      <p class="source__hint">
-        Abrir NHK News Web Easy:
-        <a href="https://www3.nhk.or.jp/news/easy/" target="_blank" rel="noopener">
-          www3.nhk.or.jp/news/easy
-        </a>
-      </p>
-    `;
+  root
+    .querySelector<HTMLButtonElement>("#src-wiki")!
+    .addEventListener("click", () => renderWikiPanel(area, textarea, "ja.wikipedia.org"));
+  root
+    .querySelector<HTMLButtonElement>("#src-news")!
+    .addEventListener("click", () => renderWikiPanel(area, textarea, "ja.wikinews.org"));
+}
+
+// Carga el texto de un artículo en el cuadro y deja listo para Analizar.
+async function loadArticle(
+  host: WikiHost,
+  title: string,
+  area: HTMLElement,
+  textarea: HTMLTextAreaElement
+) {
+  area.innerHTML = `<p class="source__hint">Cargando “${escapeText(title)}”…</p>`;
+  try {
+    const text = await fetchExtract(host, title);
+    if (!text) {
+      area.innerHTML = `<p class="explain__error">El artículo no tiene texto legible. Prueba otro.</p>`;
+      return;
+    }
+    textarea.value = text;
+    state.text = text;
+    area.innerHTML = `<p class="source__hint">“${escapeText(title)}” cargado. Pulsa Analizar.</p>`;
+  } catch {
+    area.innerHTML = `<p class="explain__error">No se pudo cargar el artículo. Reintenta.</p>`;
+  }
+}
+
+function renderList(
+  pages: WikiPage[],
+  host: WikiHost,
+  listEl: HTMLElement,
+  area: HTMLElement,
+  textarea: HTMLTextAreaElement
+) {
+  if (pages.length === 0) {
+    listEl.innerHTML = `<p class="source__hint">Sin resultados.</p>`;
+    return;
+  }
+  const ul = document.createElement("ul");
+  ul.className = "source-list";
+  for (const p of pages) {
+    const li = document.createElement("li");
+    li.className = "source-list__item";
+    li.textContent = p.title;
+    li.addEventListener("click", () => loadArticle(host, p.title, area, textarea));
+    ul.appendChild(li);
+  }
+  listEl.replaceChildren(ul);
+}
+
+function renderWikiPanel(
+  area: HTMLElement,
+  textarea: HTMLTextAreaElement,
+  host: WikiHost
+) {
+  const isNews = host === "ja.wikinews.org";
+  area.innerHTML = `
+    <div class="source__row" style="margin-top:var(--space-3)">
+      <input class="field__input" id="wiki-q" type="search"
+        placeholder="${isNews ? "Buscar noticias…" : "Buscar tema…"}" />
+      <button class="btn" id="wiki-search">Buscar</button>
+      <button class="btn" id="wiki-rand">${isNews ? "Recientes" : "Al azar"}</button>
+    </div>
+    <div id="wiki-list"></div>
+  `;
+  const input = area.querySelector<HTMLInputElement>("#wiki-q")!;
+  const listEl = area.querySelector<HTMLElement>("#wiki-list")!;
+
+  const doSearch = async () => {
+    listEl.innerHTML = `<p class="source__hint">Buscando…</p>`;
+    try {
+      renderList(await searchPages(host, input.value), host, listEl, area, textarea);
+    } catch {
+      listEl.innerHTML = `<p class="explain__error">No se pudo buscar. Reintenta.</p>`;
+    }
+  };
+  const doBrowse = async () => {
+    listEl.innerHTML = `<p class="source__hint">Cargando…</p>`;
+    try {
+      let pages = isNews ? await recentPages(host) : await randomPages(host);
+      // Wikinews ja tiene poca actividad: si no hay recientes, cae a al azar.
+      if (isNews && pages.length === 0) pages = await randomPages(host);
+      renderList(pages, host, listEl, area, textarea);
+    } catch {
+      listEl.innerHTML = `<p class="explain__error">No se pudo cargar. Reintenta.</p>`;
+    }
+  };
+
+  area.querySelector<HTMLButtonElement>("#wiki-search")!.addEventListener("click", doSearch);
+  area.querySelector<HTMLButtonElement>("#wiki-rand")!.addEventListener("click", doBrowse);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") doSearch();
   });
+
+  // Carga inicial: noticias recientes o artículos al azar.
+  void doBrowse();
+}
+
+function escapeText(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function setupOcr(root: HTMLElement, textarea: HTMLTextAreaElement) {

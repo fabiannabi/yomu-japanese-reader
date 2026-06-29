@@ -28,7 +28,7 @@ async function render(root: HTMLElement) {
       <label class="field__label" for="api-key">API key de Claude</label>
       <div class="field__row">
         <input class="field__input" id="api-key" type="password" autocomplete="off"
-          placeholder="sk-ant-..." value="${settings.apiKey ?? ""}" />
+          placeholder="sk-ant-..." />
         <button class="btn btn--primary" id="save-key">Guardar</button>
       </div>
       <p class="field__status" id="key-status"></p>
@@ -47,13 +47,14 @@ async function render(root: HTMLElement) {
     </div>
 
     <p class="settings-note">
-      Fuente NHK News Web Easy: no disponible. NHK migró su sitio y cerró el acceso
-      público a su lista de noticias, así que de momento no se puede leer automáticamente;
-      copia el texto del artículo y pégalo en la pestaña Leer.
+      Fuentes de lectura: en la pestaña Leer puedes traer texto real de Wikipedia
+      (cualquier tema, o al azar) y de Wikinews (noticias) en japonés — vía su API
+      pública, sin proxy. NHK News Web Easy ya no está disponible (cerró su acceso público).
     </p>
   `;
 
   const keyInput = container.querySelector<HTMLInputElement>("#api-key")!;
+  keyInput.value = settings.apiKey ?? "";
   const status = container.querySelector<HTMLElement>("#key-status")!;
   container.querySelector<HTMLButtonElement>("#save-key")!.addEventListener("click", async () => {
     await saveSettings({ apiKey: keyInput.value.trim() || undefined });
