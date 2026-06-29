@@ -1,0 +1,52 @@
+/* Tokens de diseño — identidad "tinta sobre papel" (§9 de CLAUDE.md) */
+
+:root {
+  /* Paleta — modo claro */
+  --paper: #faf8f3;
+  --ink: #1a1c22;
+  --ink-soft: #4d4f57;
+  --indigo: #284b8c; /* 藍 — acción principal */
+  --indigo-tint: rgba(40, 75, 140, 0.12); /* fondo de palabra resaltada */
+  --indigo-tint-strong: rgba(40, 75, 140, 0.22);
+  --vermilion: #c8482e; /* 朱 — SOLO alertas / "por repasar" */
+  --vermilion-tint: rgba(200, 72, 46, 0.12);
+  --line: #e3ddd0;
+  --surface: #ffffff;
+
+  /* Tipografía */
+  --font-ui:
+    system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-jp: "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif;
+
+  /* Radios y espacios */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --nav-height: 64px;
+  --shadow-sheet: 0 -8px 32px rgba(26, 28, 34, 0.14);
+  --shadow-card: 0 1px 3px rgba(26, 28, 34, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #15161a;
+    --ink: #eceae3;
+    --ink-soft: #a8a69e;
+    --indigo: #8fb0e8;
+    --indigo-tint: rgba(143, 176, 232, 0.16);
+    --indigo-tint-strong: rgba(143, 176, 232, 0.28);
+    --vermilion: #e2664c;
+    --vermilion-tint: rgba(226, 102, 76, 0.16);
+    --line: #2a2c33;
+    --surface: #1d1f25;
+    --shadow-sheet: 0 -8px 32px rgba(0, 0, 0, 0.5);
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+}
