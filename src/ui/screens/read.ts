@@ -1,4 +1,5 @@
 import "../../styles/reader.css";
+import "../../styles/settings.css";
 import { analyzeText, type AnnotatedToken } from "../../services/reader.ts";
 import { getKnownSet } from "../../services/known-words.ts";
 import { getDeckWordSet } from "../../services/deck.ts";
@@ -9,6 +10,7 @@ import {
 } from "../../data/jmdict.ts";
 import { openWordSheet } from "../components/word-sheet.ts";
 import { recognizeImage, type OcrProgress } from "../../services/ocr.ts";
+import { fetchNhkList, fetchNhkArticle } from "../../services/nhk.ts";
 
 /** Identidad de un token para el modelo del estudiante (forma de diccionario o superficie). */
 function identityOf(t: AnnotatedToken): string {
@@ -71,6 +73,7 @@ function renderSource(root: HTMLElement) {
     <div class="source__actions">
       <button class="btn btn--primary" id="analyze">Analizar</button>
       <button class="btn" id="photo">Foto / cámara</button>
+      <button class="btn" id="nhk">NHK (experimental)</button>
       <button class="btn" id="example">Usar ejemplo</button>
     </div>
     <input type="file" id="photo-input" accept="image/*" capture="environment" hidden />
@@ -78,6 +81,7 @@ function renderSource(root: HTMLElement) {
       <span id="ocr-label"></span>
       <div class="dict-bar__progress"><span id="ocr-prog"></span></div>
     </div>
+    <div id="nhk-area"></div>
     <p class="source__hint">Las palabras nuevas se resaltan; las que ya dominas quedan en texto plano.</p>
   `;
 
@@ -85,6 +89,7 @@ function renderSource(root: HTMLElement) {
   textarea.value = state.text;
 
   setupOcr(root, textarea);
+  setupNhk(root, textarea);
 
   root.querySelector<HTMLButtonElement>("#example")!.addEventListener("click", () => {
     textarea.value = EXAMPLE;
@@ -110,6 +115,40 @@ function renderSource(root: HTMLElement) {
   });
 
   void renderDictBar(root.querySelector<HTMLElement>("#dict-bar")!);
+}
+
+function setupNhk(root: HTMLElement, textarea: HTMLTextAreaElement) {
+  const btn = root.querySelector<HTMLButtonElement>("#nhk")!;
+  const area = root.querySelector<HTMLElement>("#nhk-area")!;
+
+  btn.addEventListener("click", async () => {
+    area.innerHTML = `<p class="source__hint">Cargando noticias de NHK…</p>`;
+    try {
+      const list = await fetchNhkList();
+      const ul = document.createElement("ul");
+      ul.className = "source-list";
+      for (const article of list) {
+        const li = document.createElement("li");
+        li.className = "source-list__item";
+        li.textContent = article.title;
+        li.addEventListener("click", async () => {
+          area.innerHTML = `<p class="source__hint">Cargando artículo…</p>`;
+          try {
+            const text = await fetchNhkArticle(article.id);
+            textarea.value = text;
+            state.text = text;
+            area.innerHTML = `<p class="source__hint">Artículo cargado. Pulsa Analizar.</p>`;
+          } catch (err) {
+            area.innerHTML = `<p class="explain__error">${err instanceof Error ? err.message : "Error"}</p>`;
+          }
+        });
+        ul.appendChild(li);
+      }
+      area.replaceChildren(ul);
+    } catch (err) {
+      area.innerHTML = `<p class="explain__error">${err instanceof Error ? err.message : "Error al cargar NHK."}</p>`;
+    }
+  });
 }
 
 function setupOcr(root: HTMLElement, textarea: HTMLTextAreaElement) {
@@ -228,13 +267,14 @@ function renderLine(tokens: AnnotatedToken[], root: HTMLElement): HTMLElement {
     p.innerHTML = "&nbsp;";
     return p;
   }
+  const sentence = tokens.map((t) => t.surface).join("");
   for (const t of tokens) {
-    p.appendChild(renderToken(t, root));
+    p.appendChild(renderToken(t, root, sentence));
   }
   return p;
 }
 
-function renderToken(t: AnnotatedToken, root: HTMLElement): Node {
+function renderToken(t: AnnotatedToken, root: HTMLElement, sentence: string): Node {
   // Partículas, signos y demás: texto plano no tocable.
   if (!t.isContent) {
     const span = document.createElement("span");
@@ -269,6 +309,7 @@ function renderToken(t: AnnotatedToken, root: HTMLElement): Node {
         reading: t.entry?.reading || t.reading,
         meaning: t.entry?.meaning,
         pos: t.entry?.pos,
+        sentence,
       },
       {
         onTracked: (id) => {

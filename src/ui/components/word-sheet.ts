@@ -1,5 +1,7 @@
+import "../../styles/settings.css";
 import { addToDeck, isInDeck } from "../../services/deck.ts";
 import { isKnown } from "../../services/known-words.ts";
+import { explainGrammar, MissingApiKeyError } from "../../services/llm.ts";
 
 export interface WordSheetData {
   /** Identidad para mazo/conocidas (forma de diccionario o superficie). */
@@ -8,6 +10,8 @@ export interface WordSheetData {
   reading: string;
   meaning?: string;
   pos?: string;
+  /** Oración que contiene la palabra (para “explicar gramática”). */
+  sentence?: string;
 }
 
 interface WordSheetOptions {
@@ -44,10 +48,9 @@ export async function openWordSheet(
     </p>
     <div class="sheet__actions">
       <button class="btn btn--primary" data-action="deck"></button>
-      <button class="btn" data-action="explain" disabled title="Disponible en la Fase 5">
-        Explicar
-      </button>
+      <button class="btn" data-action="explain">Explicar</button>
     </div>
+    <div class="explain" id="explain" hidden></div>
   `;
 
   const deckBtn = sheet.querySelector<HTMLButtonElement>('[data-action="deck"]')!;
@@ -74,6 +77,42 @@ export async function openWordSheet(
     const added = await addToDeck(data.identity, data.reading, data.meaning ?? "");
     refreshDeckBtn({ known: false, inDeck: true });
     if (added) options.onTracked?.(data.identity);
+  });
+
+  const explainBtn = sheet.querySelector<HTMLButtonElement>('[data-action="explain"]')!;
+  const explainBox = sheet.querySelector<HTMLElement>("#explain")!;
+  explainBtn.addEventListener("click", async () => {
+    const sentence = data.sentence?.trim() || data.word;
+    explainBox.hidden = false;
+    explainBox.innerHTML = `<p class="explain__loading">Pensando…</p>`;
+    explainBtn.disabled = true;
+    try {
+      const text = await explainGrammar(sentence);
+      explainBox.innerHTML = `
+        <p class="explain__title">Gramática</p>
+        <div class="explain__body"></div>
+      `;
+      explainBox.querySelector<HTMLElement>(".explain__body")!.textContent = text;
+    } catch (err) {
+      if (err instanceof MissingApiKeyError) {
+        explainBox.innerHTML = `<p class="explain__error">Añade tu API key en Ajustes para usar “explicar”.</p>`;
+        const link = document.createElement("button");
+        link.className = "btn";
+        link.textContent = "Ir a Ajustes";
+        link.style.marginTop = "var(--space-2)";
+        link.addEventListener("click", () => {
+          close();
+          location.hash = "#/ajustes";
+        });
+        explainBox.appendChild(link);
+      } else {
+        explainBox.innerHTML = `<p class="explain__error">${escapeHtml(
+          err instanceof Error ? err.message : "Error al explicar."
+        )}</p>`;
+      }
+    } finally {
+      explainBtn.disabled = false;
+    }
   });
 
   function close() {

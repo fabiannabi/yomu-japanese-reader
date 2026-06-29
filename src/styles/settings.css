@@ -1,0 +1,96 @@
+/* Ajustes y panel de explicación */
+
+.field {
+  margin-bottom: var(--space-5);
+}
+.field__label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+.field__hint {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  margin: var(--space-2) 0 0;
+}
+.field__input,
+.field__select {
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+.field__row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+.field__row .field__input {
+  flex: 1;
+}
+.field__status {
+  font-size: 0.85rem;
+  margin-top: var(--space-2);
+  min-height: 1.2em;
+}
+.field__status--ok {
+  color: var(--indigo);
+}
+.field__status--err {
+  color: var(--vermilion);
+}
+
+.settings-note {
+  border-top: 1px solid var(--line);
+  padding-top: var(--space-4);
+  margin-top: var(--space-5);
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+/* Explicación gramatical dentro de la hoja */
+.explain {
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--line);
+  padding-top: var(--space-4);
+}
+.explain__title {
+  font-weight: 600;
+  margin: 0 0 var(--space-2);
+}
+.explain__body {
+  white-space: pre-wrap;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+.explain__loading {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+.explain__error {
+  color: var(--vermilion);
+  font-size: 0.9rem;
+}
+
+/* Lista de fuentes (NHK) */
+.source-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-3) 0 0;
+}
+.source-list__item {
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  margin-bottom: var(--space-2);
+  cursor: pointer;
+  font-family: var(--font-jp);
+}
+.source-list__item:hover {
+  background: var(--indigo-tint);
+}

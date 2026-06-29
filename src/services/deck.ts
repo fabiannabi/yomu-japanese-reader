@@ -36,6 +36,15 @@ export async function getDeckWordSet(): Promise<Set<string>> {
   return new Set(all.map((c) => c.word));
 }
 
+/** Exporta el mazo como JSON (para respaldo, §7 ajustes). */
+export async function exportDeck(): Promise<string> {
+  const [deck, known] = await Promise.all([
+    db.deck.toArray(),
+    db.knownWords.toArray(),
+  ]);
+  return JSON.stringify({ exportedAt: Date.now(), deck, known }, null, 2);
+}
+
 /** Tarjetas vencidas (due <= ahora), orden por vencimiento. */
 export async function getDueCards(now = Date.now()): Promise<DeckCard[]> {
   return db.deck.where("due").belowOrEqual(now).sortBy("due");
